@@ -3,6 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import Pusher from "pusher";
 import fs from "fs";
+import path from "path";
 import { setDirection } from "./containers/motor/ledControl.js"; // 🟢 GPIO
 import { playSound } from "./containers/audio/audio.js"; // 🔊 Audio playback
 
@@ -24,9 +25,27 @@ const pusher = new Pusher({
   useTLS: process.env.PUSHER_TLS === "true",
 });
 
-// --- Game State ---
-let gameObjects = [];
+// --- Helpers to save/load state ---
+const stateFile = path.resolve("./data/state.json");
 
+function loadState() {
+  try {
+    const raw = fs.readFileSync(stateFile, "utf8");
+    return JSON.parse(raw);
+  } catch {
+    return { gameObjects: [], clawPos: { x: 0, y: 0 } };
+  }
+}
+
+function saveState(state) {
+  fs.writeFileSync(stateFile, JSON.stringify(state, null, 2));
+}
+
+// 🧠 Load persisted state
+let { gameObjects, clawPos } = loadState();
+global.clawPos = clawPos || { x: 0, y: 0 };
+
+// --- Game setup ---
 const foods = JSON.parse(fs.readFileSync("./data/food_bg_impact.json", "utf8"));
 const exercises = JSON.parse(fs.readFileSync("./data/exercise_bg_effects.json", "utf8"));
 
@@ -75,6 +94,9 @@ app.post("/send-event", async (req, res) => {
     // 1️⃣ Initialize game
     if (event === "init-game") {
       gameObjects = generateObjects();
+      global.clawPos = { x: 0, y: 0 };
+      saveState({ gameObjects, clawPos: global.clawPos });
+
       await pusher.trigger("joystick-channel", "objects-init", gameObjects);
       console.log("🎮 Game initialized with 6 objects");
       return res.json({ success: true });
@@ -89,11 +111,8 @@ app.post("/send-event", async (req, res) => {
         console.warn("⚠️ Grab GPIO/Audio failed:", e.message);
       }
 
-      const { clawX, clawY } = data;
-      if (clawX == null || clawY == null) {
-        console.log("⚠️ Grab without coordinates");
-        return res.json({ success: false });
-      }
+      const clawX = (global.clawPos?.x || 0) + 130;
+      const clawY = (global.clawPos?.y || 0) + 130;
 
       let nearest = null;
       let nearestDist = Infinity;
@@ -110,9 +129,11 @@ app.post("/send-event", async (req, res) => {
       if (nearest && nearestDist < 40) {
         console.log("🎯 Grabbed:", nearest.type, nearest.food || nearest.exercise);
         gameObjects = gameObjects.filter((o) => o !== nearest);
+        saveState({ gameObjects, clawPos: global.clawPos });
+
         await pusher.trigger("joystick-channel", "object-grabbed", nearest);
 
-        // 🧮 Calculate blood glucose impact and send to graphics
+        // 🧮 Calculate blood glucose impact
         let impact = 0;
         let name = "";
         if (nearest.type === "food") {
@@ -128,6 +149,16 @@ app.post("/send-event", async (req, res) => {
           name,
           impact,
         });
+
+        // 🏁 If all objects collected → restart next round
+        if (gameObjects.length === 0) {
+          console.log("🏁 Game finished — resetting next round");
+          gameObjects = generateObjects();
+          global.clawPos = { x: 0, y: 0 };
+          saveState({ gameObjects, clawPos: global.clawPos });
+          await pusher.trigger("joystick-channel", "objects-init", gameObjects);
+        }
+
       } else {
         console.log("❌ No object close enough to grab");
       }
@@ -148,6 +179,8 @@ app.post("/send-event", async (req, res) => {
         case "right": global.clawPos.x = Math.min(120, global.clawPos.x + step); break;
       }
 
+      saveState({ gameObjects, clawPos: global.clawPos });
+
       try {
         setDirection(dir);  // GPIO
         playSound("move");  // 🔊
@@ -165,6 +198,7 @@ app.post("/send-event", async (req, res) => {
     // 4️⃣ Generic event forwarding
     await pusher.trigger(channel, event, data);
     res.json({ success: true });
+
   } catch (err) {
     console.error("❌ Error:", err);
     res.status(500).json({ success: false, error: err.message });

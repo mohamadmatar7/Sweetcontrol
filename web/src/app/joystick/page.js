@@ -9,30 +9,49 @@ export default function JoystickPage() {
   const lastPositionRef = useRef({ x: 0, y: 0 });
 
   // 🎯 Setup Pusher listener
-  useEffect(() => {
-    const pusher = new Pusher(process.env.NEXT_PUBLIC_PUSHER_KEY, {
-      wsHost: process.env.NEXT_PUBLIC_SOKETI_HOST,
-      wsPort: Number(process.env.NEXT_PUBLIC_SOKETI_PORT),
-      forceTLS: process.env.NEXT_PUBLIC_SOKETI_TLS === "true",
-      enabledTransports: ["ws", "wss"],
-    });
+useEffect(() => {
+  const pusher = new Pusher(process.env.NEXT_PUBLIC_PUSHER_KEY, {
+    wsHost: process.env.NEXT_PUBLIC_SOKETI_HOST,
+    wsPort: Number(process.env.NEXT_PUBLIC_SOKETI_PORT),
+    forceTLS: process.env.NEXT_PUBLIC_SOKETI_TLS === "true",
+    enabledTransports: ["ws", "wss"],
+  });
 
-    const channel = pusher.subscribe("joystick-channel");
+  const channel = pusher.subscribe("joystick-channel");
 
-    // 🌀 Detect when the Motor triggers a new game
-    channel.bind("objects-init", () => {
-      console.log("♻️ Game reinitialized — resetting joystick position");
-      lastPositionRef.current = { x: 0, y: 0 };
-      setResetNotice(true);
-      setTimeout(() => setResetNotice(false), 2000);
-    });
+  // ✅ Sync when connected
+  pusher.connection.bind("connected", async () => {
+    console.log("✅ Joystick connected — requesting latest game state...");
+    try {
+      await fetch(`${process.env.NEXT_PUBLIC_CORE_URL}/send-event`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          channel: "joystick-channel",
+          event: "init-game",
+          data: {},
+        }),
+      });
+    } catch (err) {
+      console.error("❌ Failed to request init-game:", err);
+    }
+  });
 
-    return () => {
-      channel.unbind_all();
-      pusher.unsubscribe("joystick-channel");
-      pusher.disconnect();
-    };
-  }, []);
+  // 🌀 Reset joystick when new game starts
+  channel.bind("objects-init", () => {
+    console.log("♻️ Game reinitialized — resetting joystick position");
+    lastPositionRef.current = { x: 0, y: 0 };
+    setResetNotice(true);
+    setTimeout(() => setResetNotice(false), 2000);
+  });
+
+  return () => {
+    channel.unbind_all();
+    pusher.unsubscribe("joystick-channel");
+    pusher.disconnect();
+  };
+}, []);
+
 
   // 🚀 Send commands to Core
   const sendCommand = async (event, data) => {

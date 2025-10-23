@@ -93,3 +93,12 @@ web/coverage/
 *.bak
 *.orig
 *.old
+
+# =========================================
+# cloudflared
+# =========================================
+cloudflared/cert.pem
+cloudflared/credentials-file
+cloudflared/logs/
+cloudflared/tmp/
+# =========================================

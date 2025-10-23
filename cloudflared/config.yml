@@ -1,0 +1,9 @@
+tunnel: 33138846-6498-4848-b57b-14ec0157d81e
+credentials-file: /etc/cloudflared/33138846-6498-4848-b57b-14ec0157d81e.json
+
+ingress:
+  - hostname: app.sweetcontrol.be
+    service: http://sweetcontrol-nginx:80
+  - hostname: ws.sweetcontrol.be
+    service: http://sweetcontrol-soketi:6001
+  - service: http_status:404

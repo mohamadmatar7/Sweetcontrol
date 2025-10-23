@@ -7,6 +7,7 @@ services:
     command: npm run dev
     volumes:
       - ./core:/app
+      - ./core/data:/app/data
       - /app/node_modules
       - /run/user/1000/pulse:/run/user/1000/pulse
     ports:
@@ -29,7 +30,9 @@ services:
     depends_on:
       - soketi
     networks:
-      - sweetnet
+      sweetnet:
+        aliases:
+          - sweetcontrol-core # ✅ added alias for nginx to reach it
 
   sweet-web:
     build: ./web
@@ -80,8 +83,25 @@ services:
       - sweet-web
       - sweet-core
     networks:
-      - sweetnet
+      sweetnet:
+        aliases:
+          - sweet-nginx
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: sweetcontrol-cloudflared
+    command: tunnel run
+    volumes:
+      - ./cloudflared:/etc/cloudflared
+    depends_on:
+      - sweet-nginx
+    networks:
+      sweetnet:
+        aliases:
+          - sweet-nginx
+    restart: always
 
 networks:
   sweetnet:
+    name: sweetnet
     driver: bridge
