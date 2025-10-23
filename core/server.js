@@ -25,7 +25,7 @@ const pusher = new Pusher({
   useTLS: process.env.PUSHER_TLS === "true",
 });
 
-// --- Helpers to save/load state ---
+// --- Helpers for saving/loading state ---
 const stateFile = path.resolve("./data/state.json");
 
 function loadState() {
@@ -33,7 +33,7 @@ function loadState() {
     const raw = fs.readFileSync(stateFile, "utf8");
     return JSON.parse(raw);
   } catch {
-    return { gameObjects: [], clawPos: { x: 0, y: 0 } };
+    return null;
   }
 }
 
@@ -41,16 +41,22 @@ function saveState(state) {
   fs.writeFileSync(stateFile, JSON.stringify(state, null, 2));
 }
 
-// 🧠 Load persisted state
-let { gameObjects, clawPos } = loadState();
-global.clawPos = clawPos || { x: 0, y: 0 };
+// --- Load or initialize game state ---
+let gameState =
+  loadState() || {
+    gameObjects: [],
+    clawPos: { x: 0, y: 0 },
+  };
 
-// --- Game setup ---
+// --- Load game data files ---
 const foods = JSON.parse(fs.readFileSync("./data/food_bg_impact.json", "utf8"));
 const exercises = JSON.parse(fs.readFileSync("./data/exercise_bg_effects.json", "utf8"));
 
-const randomItems = (arr, count) => arr.sort(() => 0.5 - Math.random()).slice(0, count);
+// Utility: pick random items
+const randomItems = (arr, count) =>
+  arr.sort(() => 0.5 - Math.random()).slice(0, count);
 
+// --- Generate new random objects for the game ---
 function generateObjects() {
   const used = [];
   const randomPos = () => {
@@ -81,42 +87,83 @@ function generateObjects() {
   return [...badFoods, ...goodExercises];
 }
 
+// --- Initialize state if empty ---
+if (!gameState.gameObjects.length) {
+  gameState.gameObjects = generateObjects();
+  saveState(gameState);
+}
+
 // --- ROUTES ---
 
 app.get("/", (req, res) => res.send("✅ Sweetcontrol Core running"));
 
-// 🔄 Main endpoint
+// 🔄 Main endpoint for all game events
 app.post("/send-event", async (req, res) => {
   try {
     const { channel, event, data } = req.body;
     console.log(`📨 Event '${event}' →`, data);
 
-    // 1️⃣ Initialize game
+    // 1️⃣ Game initialization request (from any client)
+    // This does NOT reset the game unless it's completely finished.
     if (event === "init-game") {
-      gameObjects = generateObjects();
-      global.clawPos = { x: 0, y: 0 };
-      saveState({ gameObjects, clawPos: global.clawPos });
+      await pusher.trigger("joystick-channel", "objects-init", gameState.gameObjects);
+      console.log("📤 Sent current game state to new client");
+      return res.json({ success: true, gameState });
+    }
 
-      await pusher.trigger("joystick-channel", "objects-init", gameObjects);
-      console.log("🎮 Game initialized with 6 objects");
+    // 2️⃣ Handle move event (claw movement)
+    if (event === "move") {
+      const step = 20;
+      const dir = data.direction;
+
+      switch (dir) {
+        case "up":
+          gameState.clawPos.y = Math.max(-120, gameState.clawPos.y - step);
+          break;
+        case "down":
+          gameState.clawPos.y = Math.min(120, gameState.clawPos.y + step);
+          break;
+        case "left":
+          gameState.clawPos.x = Math.max(-120, gameState.clawPos.x - step);
+          break;
+        case "right":
+          gameState.clawPos.x = Math.min(120, gameState.clawPos.x + step);
+          break;
+      }
+
+      saveState(gameState);
+
+      try {
+        setDirection(dir); // GPIO control
+        playSound("move"); // Audio feedback
+      } catch (e) {
+        console.warn("⚠️ Move GPIO/Audio failed:", e.message);
+      }
+
+      await pusher.trigger("joystick-channel", "move", {
+        direction: dir,
+        position: gameState.clawPos,
+      });
+
       return res.json({ success: true });
     }
 
-    // 2️⃣ Handle grab event
+    // 3️⃣ Handle grab (catch) event
     if (event === "grab" && data.active) {
       try {
         setDirection("grab"); // GPIO
-        playSound("grab");    // 🔊
+        playSound("grab"); // Sound effect
       } catch (e) {
         console.warn("⚠️ Grab GPIO/Audio failed:", e.message);
       }
 
-      const clawX = (global.clawPos?.x || 0) + 130;
-      const clawY = (global.clawPos?.y || 0) + 130;
+      const clawX = gameState.clawPos.x + 130;
+      const clawY = gameState.clawPos.y + 130;
 
+      // Find the closest object to the claw
       let nearest = null;
       let nearestDist = Infinity;
-      gameObjects.forEach((obj) => {
+      gameState.gameObjects.forEach((obj) => {
         const dx = clawX - obj.x;
         const dy = clawY - obj.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
@@ -128,12 +175,14 @@ app.post("/send-event", async (req, res) => {
 
       if (nearest && nearestDist < 40) {
         console.log("🎯 Grabbed:", nearest.type, nearest.food || nearest.exercise);
-        gameObjects = gameObjects.filter((o) => o !== nearest);
-        saveState({ gameObjects, clawPos: global.clawPos });
+
+        // Remove the grabbed object
+        gameState.gameObjects = gameState.gameObjects.filter((o) => o !== nearest);
+        saveState(gameState);
 
         await pusher.trigger("joystick-channel", "object-grabbed", nearest);
 
-        // 🧮 Calculate blood glucose impact
+        // Calculate glucose impact
         let impact = 0;
         let name = "";
         if (nearest.type === "food") {
@@ -150,15 +199,14 @@ app.post("/send-event", async (req, res) => {
           impact,
         });
 
-        // 🏁 If all objects collected → restart next round
-        if (gameObjects.length === 0) {
-          console.log("🏁 Game finished — resetting next round");
-          gameObjects = generateObjects();
-          global.clawPos = { x: 0, y: 0 };
-          saveState({ gameObjects, clawPos: global.clawPos });
-          await pusher.trigger("joystick-channel", "objects-init", gameObjects);
+        // If all objects are collected → start a new round
+        if (gameState.gameObjects.length === 0) {
+          console.log("🏁 Game finished — generating new round");
+          gameState.gameObjects = generateObjects();
+          gameState.clawPos = { x: 0, y: 0 };
+          saveState(gameState);
+          await pusher.trigger("joystick-channel", "objects-init", gameState.gameObjects);
         }
-
       } else {
         console.log("❌ No object close enough to grab");
       }
@@ -166,39 +214,9 @@ app.post("/send-event", async (req, res) => {
       return res.json({ success: true });
     }
 
-    // 3️⃣ Handle move event
-    if (event === "move") {
-      if (!global.clawPos) global.clawPos = { x: 0, y: 0 };
-      const step = 20;
-      const dir = data.direction;
-
-      switch (dir) {
-        case "up": global.clawPos.y = Math.max(-120, global.clawPos.y - step); break;
-        case "down": global.clawPos.y = Math.min(120, global.clawPos.y + step); break;
-        case "left": global.clawPos.x = Math.max(-120, global.clawPos.x - step); break;
-        case "right": global.clawPos.x = Math.min(120, global.clawPos.x + step); break;
-      }
-
-      saveState({ gameObjects, clawPos: global.clawPos });
-
-      try {
-        setDirection(dir);  // GPIO
-        playSound("move");  // 🔊
-      } catch (e) {
-        console.warn("⚠️ Move GPIO/Audio failed:", e.message);
-      }
-
-      await pusher.trigger("joystick-channel", "move", {
-        direction: dir,
-        position: global.clawPos,
-      });
-      return res.json({ success: true });
-    }
-
-    // 4️⃣ Generic event forwarding
+    // 4️⃣ Fallback: forward any other custom event to the channel
     await pusher.trigger(channel, event, data);
     res.json({ success: true });
-
   } catch (err) {
     console.error("❌ Error:", err);
     res.status(500).json({ success: false, error: err.message });

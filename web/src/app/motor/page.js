@@ -5,11 +5,10 @@ import Pusher from "pusher-js";
 
 export default function MotorPage() {
   const [position, setPosition] = useState({ x: 0, y: 0 });
-  const positionRef = useRef({ x: 0, y: 0 });
   const [grab, setGrab] = useState(false);
   const [objects, setObjects] = useState([]);
+  const positionRef = useRef({ x: 0, y: 0 });
 
-  // 🎯 Setup Pusher (connect once)
   useEffect(() => {
     const pusher = new Pusher(process.env.NEXT_PUBLIC_PUSHER_KEY, {
       wsHost: process.env.NEXT_PUBLIC_SOKETI_HOST,
@@ -20,45 +19,45 @@ export default function MotorPage() {
 
     const channel = pusher.subscribe("joystick-channel");
 
-    // ✅ When connection is ready, initialize game
+    // ✅ On connection, request the current live state (no reset)
     pusher.connection.bind("connected", async () => {
-      console.log("✅ Pusher connected — requesting objects...");
-      await fetch(`${process.env.NEXT_PUBLIC_CORE_URL}/send-event`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          channel: "joystick-channel",
-          event: "init-game",
-          data: {},
-        }),
-      });
+      console.log("✅ Motor connected — syncing objects...");
+      try {
+        await fetch(`${process.env.NEXT_PUBLIC_CORE_URL}/send-event`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            channel: "joystick-channel",
+            event: "init-game",
+            data: {},
+          }),
+        });
+      } catch (err) {
+        console.error("❌ Failed to request init-game:", err);
+      }
     });
 
-    // 🎮 Receive initial objects from server
+    // 🎮 Receive the current object list or new round
     channel.bind("objects-init", (data) => {
-      console.log("🎮 Received objects from server:", data);
+      console.log("🎮 Received objects:", data);
       setObjects(data);
     });
 
-    // ✋ Object grabbed from server
+    // ✋ Object removed when grabbed
     channel.bind("object-grabbed", (obj) => {
-      console.log("🎯 Grabbed from server:", obj);
+      console.log("🎯 Object grabbed:", obj);
       setObjects((prev) => prev.filter((o) => o.x !== obj.x || o.y !== obj.y));
     });
 
-    // 🎮 Movement handler
+    // 🏃 Movement updates (shared across all players)
     channel.bind("move", (data) => {
-      const step = 20;
-      setPosition((prev) => {
-        const newX = Math.max(-120, Math.min(120, prev.x + (data.direction === "right" ? step : data.direction === "left" ? -step : 0)));
-        const newY = Math.max(-120, Math.min(120, prev.y + (data.direction === "down" ? step : data.direction === "up" ? -step : 0)));
-        const newPos = { x: newX, y: newY };
-        positionRef.current = newPos;
-        return newPos;
-      });
+      if (data.position) {
+        setPosition(data.position);
+        positionRef.current = data.position;
+      }
     });
 
-    // 🤚 Grab animation
+    // 🤚 Visual grab animation
     channel.bind("grab", (data) => {
       if (data.active) {
         setGrab(true);
@@ -73,12 +72,13 @@ export default function MotorPage() {
     };
   }, []);
 
+  // 🖼️ Render UI
   return (
     <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center text-white">
       <h1 className="text-3xl font-bold mb-8">Motor Simulation</h1>
 
       <div className="relative w-80 h-80 bg-gray-800 rounded-2xl border border-gray-700 overflow-hidden">
-        {/* Render objects */}
+        {/* Render all remaining objects */}
         {objects.map((obj, i) => (
           <div
             key={i}
@@ -87,10 +87,10 @@ export default function MotorPage() {
             }`}
             style={{ left: `${obj.x}px`, top: `${obj.y}px` }}
             title={obj.type === "food" ? obj.food : obj.exercise}
-          ></div>
+          />
         ))}
 
-        {/* Claw */}
+        {/* Claw position */}
         <div
           className={`absolute w-12 h-12 rounded-full transition-all duration-150 flex items-center justify-center ${
             grab ? "bg-red-400 scale-90" : "bg-blue-400"
@@ -99,7 +99,7 @@ export default function MotorPage() {
             left: `${position.x + 130}px`,
             top: `${position.y + 130}px`,
           }}
-        ></div>
+        />
       </div>
 
       <p className="mt-6 text-gray-400 text-sm text-center max-w-xs">
