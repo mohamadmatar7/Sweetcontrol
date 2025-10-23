@@ -1,0 +1,87 @@
+services:
+  sweet-core:
+    build:
+      context: .
+      dockerfile: ./core/Dockerfile
+    container_name: sweetcontrol-core
+    command: npm run dev
+    volumes:
+      - ./core:/app
+      - /app/node_modules
+      - /run/user/1000/pulse:/run/user/1000/pulse
+    ports:
+      - "4100:4000"
+    env_file:
+      - ./core/.env
+    environment:
+      - PUSHER_HOST=soketi
+      - PUSHER_PORT=6001
+      - PUSHER_TLS=false
+      - PUSHER_APP_ID=myapp
+      - PUSHER_KEY=mykey
+      - PUSHER_SECRET=mysecret
+    restart: always
+    privileged: true
+    cap_add:
+      - SYS_RAWIO
+    devices:
+      - "/dev/gpiomem:/dev/gpiomem"
+    depends_on:
+      - soketi
+    networks:
+      - sweetnet
+
+  sweet-web:
+    build: ./web
+    container_name: sweetcontrol-web
+    command: npm run dev
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+    restart: always
+    ports:
+      - "3100:3000"
+    env_file:
+      - ./web/.env
+    depends_on:
+      - sweet-core
+      - soketi
+    networks:
+      - sweetnet
+
+  soketi:
+    image: quay.io/soketi/soketi:latest
+    container_name: sweetcontrol-soketi
+    ports:
+      - "6101:6001"
+    environment:
+      - SOKETI_DEBUG=0
+      - SOKETI_DEFAULT_APP_ID=myapp
+      - SOKETI_DEFAULT_APP_KEY=mykey
+      - SOKETI_DEFAULT_APP_SECRET=mysecret
+      - SOKETI_METRICS_ENABLED=false
+      - SOKETI_ALLOW_ORIGIN=*
+      - PORT=6001
+    restart: always
+    networks:
+      - sweetnet
+
+  sweet-nginx:
+    image: nginx:latest
+    container_name: sweetcontrol-nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./nginx/ssl:/etc/ssl/sweetcontrol
+    depends_on:
+      - sweet-web
+      - sweet-core
+    networks:
+      - sweetnet
+
+networks:
+  sweetnet:
+    driver: bridge
