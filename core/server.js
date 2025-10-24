@@ -4,8 +4,8 @@ import dotenv from "dotenv";
 import Pusher from "pusher";
 import fs from "fs";
 import path from "path";
-import { setDirection, setSugarLamp } from "./containers/motor/ledControl.js"; // 🟢 GPIO (with sugar lamp)
-import { playSound } from "./containers/audio/audio.js"; // 🔊 Audio playback
+import { setDirection, setSugarLamp } from "./containers/motor/ledControl.js";
+import { playSound } from "./containers/audio/audio.js";
 
 dotenv.config();
 
@@ -15,7 +15,9 @@ const port = process.env.PORT || 4000;
 app.use(cors());
 app.use(express.json());
 
-// --- Pusher / Soketi setup ---
+// ==========================================================
+// 🔌 PUSHER / SOKETI SETUP
+// ==========================================================
 const pusher = new Pusher({
   appId: process.env.PUSHER_APP_ID,
   key: process.env.PUSHER_KEY,
@@ -25,38 +27,48 @@ const pusher = new Pusher({
   useTLS: process.env.PUSHER_TLS === "true",
 });
 
-// --- Helpers for saving/loading state ---
+// ==========================================================
+// 🧠 STATE FILES
+// ==========================================================
 const stateFile = path.resolve("./data/state.json");
+const joystickFile = path.resolve("./data/joystick_state.json");
 
+// --- Game state helpers
 function loadState() {
   try {
-    const raw = fs.readFileSync(stateFile, "utf8");
-    return JSON.parse(raw);
+    return JSON.parse(fs.readFileSync(stateFile, "utf8"));
   } catch {
-    return null;
+    return { gameObjects: [], clawPos: { x: 0, y: 0 } };
   }
 }
-
 function saveState(state) {
   fs.writeFileSync(stateFile, JSON.stringify(state, null, 2));
 }
 
-// --- Load or initialize game state ---
-let gameState =
-  loadState() || {
-    gameObjects: [],
-    clawPos: { x: 0, y: 0 },
-  };
+// --- Joystick queue helpers
+function loadJoystickState() {
+  try {
+    return JSON.parse(fs.readFileSync(joystickFile, "utf8"));
+  } catch {
+    return { queue: [], activeSession: null };
+  }
+}
+function saveJoystickState(state) {
+  fs.writeFileSync(joystickFile, JSON.stringify(state, null, 2));
+}
 
-// --- Load game data files ---
+// ==========================================================
+// 🎮 GAME INITIALIZATION
+// ==========================================================
+let gameState = loadState();
 const foods = JSON.parse(fs.readFileSync("./data/food_bg_impact.json", "utf8"));
-const exercises = JSON.parse(fs.readFileSync("./data/exercise_bg_effects.json", "utf8"));
+const exercises = JSON.parse(
+  fs.readFileSync("./data/exercise_bg_effects.json", "utf8")
+);
 
-// Utility: pick random items
 const randomItems = (arr, count) =>
   arr.sort(() => 0.5 - Math.random()).slice(0, count);
 
-// --- Generate new random objects for the game ---
 function generateObjects() {
   const used = [];
   const randomPos = () => {
@@ -87,51 +99,148 @@ function generateObjects() {
   return [...badFoods, ...goodExercises];
 }
 
-// --- Initialize state if empty ---
 if (!gameState.gameObjects.length) {
   gameState.gameObjects = generateObjects();
   saveState(gameState);
 }
 
-// --- ROUTES ---
+// ==========================================================
+// 🕹️ JOYSTICK QUEUE SYSTEM (REFRESH-SAFE)
+// ==========================================================
+let { queue: joystickQueue, activeSession: currentSession } =
+  loadJoystickState();
 
-app.get("/", (req, res) => res.send("✅ Sweetcontrol Core running"));
+const SESSION_DURATION = 30 * 1000; // 30 seconds test duration
 
-// 🔄 Main endpoint for all game events
+// --- Broadcast queue state (with remaining time)
+async function broadcastQueue() {
+  const remaining = currentSession
+    ? Math.max(0, Math.floor((currentSession.expiresAt - Date.now()) / 1000))
+    : 0;
+
+  await pusher.trigger("joystick-queue", "queue-update", {
+    queue: joystickQueue.map((u, i) => ({ id: u.id, position: i + 1 })),
+    activeId: currentSession ? currentSession.id : null,
+    remaining,
+  });
+
+  saveJoystickState({ queue: joystickQueue, activeSession: currentSession });
+}
+
+// --- Start next session safely
+async function startNextSession() {
+  // 🛑 If a session is still active, skip
+  if (currentSession && Date.now() < currentSession.expiresAt) return;
+
+  if (joystickQueue.length === 0) {
+    currentSession = null;
+    saveJoystickState({ queue: joystickQueue, activeSession: currentSession });
+    await broadcastQueue();
+    return;
+  }
+
+  const nextUser = joystickQueue.shift();
+  const expiresAt = Date.now() + SESSION_DURATION;
+  currentSession = { id: nextUser.id, expiresAt };
+
+  console.log(`🎮 Session started for ${nextUser.id} (30s)`);
+  saveJoystickState({ queue: joystickQueue, activeSession: currentSession });
+  await broadcastQueue();
+
+  setTimeout(async () => {
+    if (currentSession && Date.now() >= currentSession.expiresAt) {
+      console.log(`⌛ Session expired for ${currentSession.id}`);
+      currentSession = null;
+      await startNextSession();
+    }
+  }, SESSION_DURATION + 500);
+}
+
+// --- Join joystick queue
+app.post("/joystick-join", async (req, res) => {
+  const userId = req.body.id;
+  if (!userId)
+    return res.status(400).json({ success: false, message: "Missing user ID" });
+
+  // 🟢 Already active → refresh-safe reconnect
+  if (currentSession?.id === userId) {
+    const remaining = Math.max(
+      0,
+      Math.floor((currentSession.expiresAt - Date.now()) / 1000)
+    );
+    console.log(`♻️ User ${userId} reconnected — ${remaining}s left`);
+
+    return res.json({
+      success: true,
+      active: true,
+      position: 0,
+      remaining,
+    });
+  }
+
+  // 🟠 Already waiting in queue
+  const existing = joystickQueue.find((u) => u.id === userId);
+  if (existing) {
+    const position = joystickQueue.indexOf(existing) + 1;
+    return res.json({ success: true, position, active: false });
+  }
+
+  // 🔴 New user joins
+  joystickQueue.push({ id: userId, joinedAt: Date.now() });
+  console.log(`🕹️ User ${userId} joined queue (pos ${joystickQueue.length})`);
+  saveJoystickState({ queue: joystickQueue, activeSession: currentSession });
+
+  if (!currentSession) await startNextSession();
+
+  const position = joystickQueue.findIndex((u) => u.id === userId) + 1;
+  await broadcastQueue();
+  res.json({ success: true, position, active: false });
+});
+
+// --- Leave joystick queue or active session
+app.post("/joystick-leave", async (req, res) => {
+  const userId = req.body.id;
+  if (!userId) return res.status(400).json({ success: false });
+
+  joystickQueue = joystickQueue.filter((u) => u.id !== userId);
+
+  if (currentSession && currentSession.id === userId) {
+    console.log(`👋 User ${userId} left active session`);
+    currentSession = null;
+    await startNextSession();
+  } else {
+    await broadcastQueue();
+  }
+
+  saveJoystickState({ queue: joystickQueue, activeSession: currentSession });
+  res.json({ success: true });
+});
+
+// ==========================================================
+// 🎮 GAME EVENTS
+// ==========================================================
 app.post("/send-event", async (req, res) => {
   try {
     const { channel, event, data } = req.body;
     console.log(`📨 Event '${event}' →`, data);
 
-    // 1️⃣ Game initialization request (from any client)
-if (event === "init-game") {
-  await pusher.trigger("joystick-channel", "objects-init", gameState.gameObjects);
-  console.log("📤 Sent current game state to new client");
+    // 1️⃣ Init
+    if (event === "init-game") {
+      await pusher.trigger("joystick-channel", "objects-init", gameState.gameObjects);
+      console.log("📤 Sent current game state");
 
-  // 🧠 Only reset glucose when explicitly requested from the GRAPHIC page
-  const fromGraphic = data?.source === "graphic";
-
-  if (fromGraphic) {
-    try {
-      global.latestGlucose = 100;
-      setSugarLamp(false); // only the dashboard resets baseline
-      console.log("🩸 Glucose reset from graphic dashboard");
-    } catch (e) {
-      console.warn("⚠️ Could not reset sugar lamp on init:", e.message);
+      if (data?.source === "graphic") {
+        global.latestGlucose = 100;
+        setSugarLamp(false);
+        console.log("🩸 Glucose reset (graphic)");
+      }
+      return res.json({ success: true, gameState });
     }
-  } else {
-    // For motor/joystick, keep the current glucose & lamp state
-    console.log("🔁 Client synced without touching glucose state");
-  }
 
-  return res.json({ success: true, gameState });
-}
-
-
-    // 2️⃣ Handle move event (claw movement)
+    // 2️⃣ Move
     if (event === "move") {
-      const step = 20;
       const dir = data.direction;
+      const step = 20;
 
       switch (dir) {
         case "up":
@@ -149,13 +258,8 @@ if (event === "init-game") {
       }
 
       saveState(gameState);
-
-      try {
-        setDirection(dir); // GPIO control
-        playSound("move"); // Audio feedback
-      } catch (e) {
-        console.warn("⚠️ Move GPIO/Audio failed:", e.message);
-      }
+      setDirection(dir);
+      playSound("move");
 
       await pusher.trigger("joystick-channel", "move", {
         direction: dir,
@@ -165,89 +269,63 @@ if (event === "init-game") {
       return res.json({ success: true });
     }
 
-    // 3️⃣ Handle grab (catch) event
+    // 3️⃣ Grab
     if (event === "grab" && data.active) {
-      try {
-        setDirection("grab"); // GPIO
-        playSound("grab"); // Sound effect
-      } catch (e) {
-        console.warn("⚠️ Grab GPIO/Audio failed:", e.message);
-      }
+      setDirection("grab");
+      playSound("grab");
 
       const clawX = gameState.clawPos.x + 130;
       const clawY = gameState.clawPos.y + 130;
 
-      // Find the closest object to the claw
       let nearest = null;
       let nearestDist = Infinity;
-      gameState.gameObjects.forEach((obj) => {
-        const dx = clawX - obj.x;
-        const dy = clawY - obj.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+      for (const obj of gameState.gameObjects) {
+        const dist = Math.hypot(clawX - obj.x, clawY - obj.y);
         if (dist < nearestDist) {
           nearestDist = dist;
           nearest = obj;
         }
-      });
+      }
 
       if (nearest && nearestDist < 40) {
         console.log("🎯 Grabbed:", nearest.type, nearest.food || nearest.exercise);
-
-        // Remove the grabbed object
         gameState.gameObjects = gameState.gameObjects.filter((o) => o !== nearest);
         saveState(gameState);
 
         await pusher.trigger("joystick-channel", "object-grabbed", nearest);
 
-        // Calculate glucose impact
-        let impact = 0;
-        let name = "";
-        if (nearest.type === "food") {
-          impact = nearest.bg_rise_mgdl || nearest.bg_rise || 20;
-          name = nearest.food;
-        } else {
-          impact = nearest.est_bg_change_mgdl || nearest.bg_rise || -20;
-          name = nearest.exercise;
-        }
+        const impact =
+          nearest.type === "food"
+            ? nearest.bg_rise_mgdl || nearest.bg_rise || 20
+            : nearest.est_bg_change_mgdl || nearest.bg_rise || -20;
+        const name = nearest.food || nearest.exercise;
 
-        // Notify front-end about glucose change
         await pusher.trigger("joystick-channel", "bg-impact", {
           type: nearest.type,
           name,
           impact,
         });
 
-        // 🩸 Control sugar lamp based on glucose
-        try {
-          const previous = global.latestGlucose || 100;
-          const latest = Math.max(60, Math.min(250, previous + impact));
-          global.latestGlucose = latest;
+        const prev = global.latestGlucose || 100;
+        const latest = Math.max(60, Math.min(250, prev + impact));
+        global.latestGlucose = latest;
+        setSugarLamp(latest > 200);
 
-          if (latest > 200) {
-            setSugarLamp(true);  // start blinking if glucose too high
-          } else {
-            setSugarLamp(false); // stop blinking when normal
-          }
-        } catch (e) {
-          console.warn("⚠️ Sugar lamp control failed:", e.message);
-        }
-
-        // If all objects are collected → start a new round
         if (gameState.gameObjects.length === 0) {
-          console.log("🏁 Game finished — generating new round");
+          console.log("🏁 New round");
           gameState.gameObjects = generateObjects();
           gameState.clawPos = { x: 0, y: 0 };
           saveState(gameState);
           await pusher.trigger("joystick-channel", "objects-init", gameState.gameObjects);
         }
       } else {
-        console.log("❌ No object close enough to grab");
+        console.log("❌ No object close enough");
       }
 
       return res.json({ success: true });
     }
 
-    // 4️⃣ Fallback: forward any other custom event to the channel
+    // Default fallback
     await pusher.trigger(channel, event, data);
     res.json({ success: true });
   } catch (err) {
@@ -256,13 +334,14 @@ if (event === "init-game") {
   }
 });
 
-// --- Ensure clean startup state ---
+// ==========================================================
+// 🩸 STARTUP
+// ==========================================================
 try {
-  setSugarLamp(false);
-  global.latestGlucose = 100;
+  if (!global.latestGlucose) global.latestGlucose = 100;
+  setSugarLamp(global.latestGlucose > 200);
 } catch (e) {
-  console.warn("⚠️ Could not reset sugar lamp on startup:", e.message);
+  console.warn("⚠️ Sugar lamp init failed:", e.message);
 }
-
 
 app.listen(port, () => console.log(`🚀 Core server running on port ${port}`));
