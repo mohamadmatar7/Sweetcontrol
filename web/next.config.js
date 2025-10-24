@@ -5,6 +5,9 @@ const nextConfig = {
   experimental: {
     trustProxy: true,
   },
+  devIndicators: {
+    appIsRunning: false, 
+  },
   async redirects() {
     return [];
   },

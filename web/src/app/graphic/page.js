@@ -31,15 +31,36 @@ export default function GraphicsPage() {
   const controls = useAnimation();
 
   // 📡 Real-time listener (no localStorage)
-  useEffect(() => {
-    const pusher = new Pusher(process.env.NEXT_PUBLIC_PUSHER_KEY, {
-      wsHost: process.env.NEXT_PUBLIC_SOKETI_HOST,
-      wsPort: Number(process.env.NEXT_PUBLIC_SOKETI_PORT),
-      forceTLS: process.env.NEXT_PUBLIC_SOKETI_TLS === "true",
-      enabledTransports: ["ws", "wss"],
-    });
+useEffect(() => {
+  const pusher = new Pusher(process.env.NEXT_PUBLIC_PUSHER_KEY, {
+    wsHost: process.env.NEXT_PUBLIC_SOKETI_HOST,
+    wsPort: Number(process.env.NEXT_PUBLIC_SOKETI_PORT),
+    forceTLS: process.env.NEXT_PUBLIC_SOKETI_TLS === "true",
+    enabledTransports: ["ws", "wss"],
+  });
 
-    const channel = pusher.subscribe("joystick-channel");
+  const channel = pusher.subscribe("joystick-channel");
+
+  // ✅ NEW: tell the Core that the graphic page has connected
+  pusher.connection.bind("connected", async () => {
+    console.log("✅ Graphic connected — requesting latest game state...");
+    try {
+      await fetch(`${process.env.NEXT_PUBLIC_CORE_URL}/send-event`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          channel: "joystick-channel",
+          event: "init-game",
+    data: { source: "graphic" },
+        }),
+      });
+    } catch (err) {
+      console.error("❌ Failed to sync with Core:", err);
+    }
+  });
+
+  // ... your other bindings (move, grab, bg-impact) stay the same ...
+
 
     channel.bind("move", (data) => {
       if (data.position) setMotorPos(data.position);

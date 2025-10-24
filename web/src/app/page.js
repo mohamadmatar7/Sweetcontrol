@@ -80,9 +80,9 @@ export default function Home() {
         >
           <Heart className="w-10 h-10 text-pink-400 group-hover:scale-110 transition-transform" />
           <div>
-            <h2 className="text-xl font-semibold">Support Us</h2>
+            <h2 className="text-xl font-semibold">Support "Warmste Week"</h2>
             <p className="text-gray-400 text-sm">
-              Help the project grow with your generous support.
+              Help diabetic patients by supporting our charity initiative.
             </p>
           </div>
         </Link>

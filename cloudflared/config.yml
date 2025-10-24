@@ -7,3 +7,5 @@ ingress:
   - hostname: ws.sweetcontrol.be
     service: http://sweetcontrol-soketi:6001
   - service: http_status:404
+
+protocol: http2

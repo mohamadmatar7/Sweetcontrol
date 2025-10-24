@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 import Pusher from "pusher";
 import fs from "fs";
 import path from "path";
-import { setDirection } from "./containers/motor/ledControl.js"; // 🟢 GPIO
+import { setDirection, setSugarLamp } from "./containers/motor/ledControl.js"; // 🟢 GPIO (with sugar lamp)
 import { playSound } from "./containers/audio/audio.js"; // 🔊 Audio playback
 
 dotenv.config();
@@ -104,12 +104,29 @@ app.post("/send-event", async (req, res) => {
     console.log(`📨 Event '${event}' →`, data);
 
     // 1️⃣ Game initialization request (from any client)
-    // This does NOT reset the game unless it's completely finished.
-    if (event === "init-game") {
-      await pusher.trigger("joystick-channel", "objects-init", gameState.gameObjects);
-      console.log("📤 Sent current game state to new client");
-      return res.json({ success: true, gameState });
+if (event === "init-game") {
+  await pusher.trigger("joystick-channel", "objects-init", gameState.gameObjects);
+  console.log("📤 Sent current game state to new client");
+
+  // 🧠 Only reset glucose when explicitly requested from the GRAPHIC page
+  const fromGraphic = data?.source === "graphic";
+
+  if (fromGraphic) {
+    try {
+      global.latestGlucose = 100;
+      setSugarLamp(false); // only the dashboard resets baseline
+      console.log("🩸 Glucose reset from graphic dashboard");
+    } catch (e) {
+      console.warn("⚠️ Could not reset sugar lamp on init:", e.message);
     }
+  } else {
+    // For motor/joystick, keep the current glucose & lamp state
+    console.log("🔁 Client synced without touching glucose state");
+  }
+
+  return res.json({ success: true, gameState });
+}
+
 
     // 2️⃣ Handle move event (claw movement)
     if (event === "move") {
@@ -193,11 +210,27 @@ app.post("/send-event", async (req, res) => {
           name = nearest.exercise;
         }
 
+        // Notify front-end about glucose change
         await pusher.trigger("joystick-channel", "bg-impact", {
           type: nearest.type,
           name,
           impact,
         });
+
+        // 🩸 Control sugar lamp based on glucose
+        try {
+          const previous = global.latestGlucose || 100;
+          const latest = Math.max(60, Math.min(250, previous + impact));
+          global.latestGlucose = latest;
+
+          if (latest > 200) {
+            setSugarLamp(true);  // start blinking if glucose too high
+          } else {
+            setSugarLamp(false); // stop blinking when normal
+          }
+        } catch (e) {
+          console.warn("⚠️ Sugar lamp control failed:", e.message);
+        }
 
         // If all objects are collected → start a new round
         if (gameState.gameObjects.length === 0) {
@@ -222,5 +255,14 @@ app.post("/send-event", async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
+
+// --- Ensure clean startup state ---
+try {
+  setSugarLamp(false);
+  global.latestGlucose = 100;
+} catch (e) {
+  console.warn("⚠️ Could not reset sugar lamp on startup:", e.message);
+}
+
 
 app.listen(port, () => console.log(`🚀 Core server running on port ${port}`));

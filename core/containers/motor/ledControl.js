@@ -6,9 +6,10 @@ const pins = {
   left: 22,
   right: 23,
   grab: 24,
+  sugar: 25,
 };
 
-// Initialize all pins as output and off
+// Initialize all pins
 for (const pin of Object.values(pins)) {
   try {
     execSync(`gpioset gpiochip0 ${pin}=0`);
@@ -25,6 +26,31 @@ function resetLeds() {
   }
 }
 
+// --- NEW: control sugar lamp ---
+let sugarBlinkInterval = null;
+
+export function setSugarLamp(on) {
+  const pin = pins.sugar;
+  if (!pin) return;
+
+  // Stop any running blink
+  if (sugarBlinkInterval) {
+    clearInterval(sugarBlinkInterval);
+    sugarBlinkInterval = null;
+    try { execSync(`gpioset gpiochip0 ${pin}=0`); } catch {}
+  }
+
+  if (on) {
+    // Start blinking every 300 ms
+    sugarBlinkInterval = setInterval(() => {
+      try {
+        execSync(`gpioset gpiochip0 ${pin}=1`);
+        setTimeout(() => execSync(`gpioset gpiochip0 ${pin}=0`), 120);
+      } catch {}
+    }, 300);
+  }
+}
+
 export function setDirection(direction) {
   console.log(`🟢 Blink direction: ${direction}`);
   resetLeds();
@@ -34,7 +60,7 @@ export function setDirection(direction) {
 
   try {
     if (direction === "grab") {
-      // Special blink pattern for grab: 3 quick flashes
+      // Quick blink pattern for grab
       let count = 0;
       const blink = setInterval(() => {
         try {
@@ -43,14 +69,11 @@ export function setDirection(direction) {
         } catch {}
         count++;
         if (count >= 5) clearInterval(blink);
-      }, 200); // delay between blinks
+      }, 200);
     } else {
-      // Normal single blink for directions
       execSync(`gpioset gpiochip0 ${pin}=1`);
       setTimeout(() => {
-        try {
-          execSync(`gpioset gpiochip0 ${pin}=0`);
-        } catch {}
+        try { execSync(`gpioset gpiochip0 ${pin}=0`); } catch {}
       }, 200);
     }
   } catch (e) {
