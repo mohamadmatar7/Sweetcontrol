@@ -112,8 +112,103 @@ function broadcastQueue() {
  * Start next waiting player if no one is active.
  * Credits are pulsed ONCE per donation.
  */
+// function maybeStartNext() {
+//     if (active) return;
+
+//     // Cleanup any waiting rows with no credits left
+//     const queueNow = listQueue();
+//     for (const q of queueNow) {
+//         const remaining = q.credits_total - q.credits_used;
+//         if (q.status === 'waiting' && remaining <= 0) {
+//             setDonationStatus(q.id, 'done');
+//         }
+//     }
+
+//     const freshQueue = listQueue();
+//     const next = freshQueue.find(q => q.status === 'waiting');
+
+//     if (!next) {
+//         broadcastQueue();
+//         return;
+//     }
+
+//     const creditsRemaining = next.credits_total - next.credits_used;
+
+//     // Safety: never activate a player with 0 or negative credits
+//     if (creditsRemaining <= 0) {
+//         setDonationStatus(next.id, 'done');
+//         return maybeStartNext();
+//     }
+
+//     active = {
+//         donationId: next.id,
+//         creditsRemaining,
+//         timer: null,
+//         timerStarted: false,
+//         creditEndsAt: null,
+//         firstMoveDeadline: Date.now() + FIRST_MOVE_MS,
+//         firstMoveTimer: null,
+//         hasMoved: false,
+//         grabUsed: false,
+//         creditSeq: 0,
+//         creditConsumed: false,
+//     };
+
+//     setDonationStatus(next.id, 'active');
+
+//     // Pulse credits only once per donation
+//     if (!next.credits_pulsed && creditsRemaining > 0) {
+//         for (let i = 0; i < creditsRemaining; i++) {
+//             setTimeout(() => gpio.pulse('credit', 200), i * 400);
+//         }
+//         markCreditsPulsed(next.id);
+//     }
+
+//     scheduleFirstMoveTimeout();
+//     broadcastQueue();
+
+//     safeTrigger('public-chat', 'player-start', {
+//         donationId: next.id,
+//         name: next.name,
+//         creditsRemaining,
+//         firstMoveDeadline: active.firstMoveDeadline,
+//     });
+// }
 function maybeStartNext() {
+    // 🛠 Self-heal: if "active" is inconsistent with DB, clear it.
+    if (active) {
+        try {
+            const row = db
+                .prepare(
+                    `
+          SELECT id, status, credits_total, credits_used
+          FROM donations
+          WHERE id = ?
+        `
+                )
+                .get(active.donationId);
+
+            const remaining = row
+                ? (row.credits_total || 0) - (row.credits_used || 0)
+                : 0;
+
+            // If DB no longer sees this donation as ACTIVE with credits,
+            // treat the in-memory "active" as a ghost and reset it.
+            if (!row || row.status !== 'active' || remaining <= 0) {
+                if (active.timer) clearTimeout(active.timer);
+                if (active.firstMoveTimer) clearTimeout(active.firstMoveTimer);
+                gpio.releaseAll();
+                active = null;
+            }
+        } catch (err) {
+            console.error('maybeStartNext self-heal error:', err);
+        }
+    }
+
+    // If after self-heal we still have a valid active player, do nothing.
     if (active) return;
+
+    // --- original logic from هنا وطالع بدون تغيير ---
 
     // Cleanup any waiting rows with no credits left
     const queueNow = listQueue();
@@ -179,6 +274,49 @@ function maybeStartNext() {
  * If player doesn't move within FIRST_MOVE_MS while others wait,
  * requeue them to the end.
  */
+// function scheduleFirstMoveTimeout() {
+//     if (!active) return;
+
+//     if (active.firstMoveTimer) clearTimeout(active.firstMoveTimer);
+
+//     active.firstMoveDeadline = Date.now() + FIRST_MOVE_MS;
+
+//     active.firstMoveTimer = setTimeout(() => {
+//         if (!active) return;
+//         if (active.hasMoved) return;
+
+//         const queueNow = listQueue();
+//         const someoneWaiting = queueNow.some(
+//             q => q.status === 'waiting' && q.id !== active.donationId
+//         );
+
+//         if (someoneWaiting) {
+//             // Player did not move within the first-move window
+//             // while someone else is already waiting.
+//             // Instead of pushing them to the back of the queue,
+//             // we end their session to avoid "stuck queue" and
+//             // weird requeue behaviour.
+//             const timedOutDonationId = active.donationId;
+
+//             endActivePlayer(); // sets status = 'done' and starts next player
+
+//             safeTrigger('public-chat', 'player-timeout', {
+//                 donationId: timedOutDonationId,
+//                 reason: 'no_first_move',
+//             });
+
+//             return;
+//         }
+
+//         // Nobody waiting => keep active and re-check later
+//         scheduleFirstMoveTimeout();
+//         broadcastQueue();
+//     }, FIRST_MOVE_MS);
+// }
+/**
+ * If player doesn't move within FIRST_MOVE_MS while others wait,
+ * requeue them to the end instead of ending their session.
+ */
 function scheduleFirstMoveTimeout() {
     if (!active) return;
 
@@ -196,28 +334,47 @@ function scheduleFirstMoveTimeout() {
         );
 
         if (someoneWaiting) {
-            // Player did not move within the first-move window
+            // Player did NOT move within the first-move window
             // while someone else is already waiting.
-            // Instead of pushing them to the back of the queue,
-            // we end their session to avoid "stuck queue" and
-            // weird requeue behaviour.
+            // ✅ New behavior:
+            //   - requeue this player to the END of the queue
+            //   - keep their remaining credits
+            //   - do NOT end their whole session
             const timedOutDonationId = active.donationId;
 
-            endActivePlayer(); // sets status = 'done' and starts next player
+            // Stop any running timers for this credit
+            if (active.timer) clearTimeout(active.timer);
+            if (active.firstMoveTimer) clearTimeout(active.firstMoveTimer);
+            active.timer = null;
+            active.firstMoveTimer = null;
 
+            // Make sure no movement stays stuck
+            gpio.releaseAll();
+
+            // Move this player to the end of the queue with status "waiting"
+            requeueToEnd(timedOutDonationId);
+
+            // Free active slot and start next player (if any)
+            active = null;
+            maybeStartNext();
+            broadcastQueue();
+
+            // Let the frontend know what happened, but DO NOT send player-end
             safeTrigger('public-chat', 'player-timeout', {
                 donationId: timedOutDonationId,
-                reason: 'no_first_move',
+                reason: 'no_first_move_requeued',
             });
 
             return;
         }
 
-        // Nobody waiting => keep active and re-check later
+        // Nobody waiting ⇒ keep the player active and check again later
         scheduleFirstMoveTimeout();
         broadcastQueue();
     }, FIRST_MOVE_MS);
 }
+
+
 
 /**
  * Start the 35s credit timer on FIRST real action.
