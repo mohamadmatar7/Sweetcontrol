@@ -4,6 +4,7 @@ const { createMollieClient } = require('@mollie/api-client');
 const gpio = require('./gpio');
 const game = require('./game');
 const createAdminRouter = require('./admin');
+const coreSerial = require('./coreSerial'); // Core sugar state (index/effect/label)
 
 const {
     createIntent,
@@ -12,14 +13,12 @@ const {
     getDonationByPaymentId,
     getDonationByToken,
     listQueue,
-
 } = require('./db');
 
 const app = express();
 
 // Disable ETag to avoid any 304/stale behavior on strange proxies/browsers
 // app.set('etag', false);
-
 
 /**
  * CORS (production-safe)
@@ -34,7 +33,7 @@ const allowedOrigins = [
 ];
 const corsOptions = {
     origin: (origin, cb) => {
-        // Allow non-browser requests (curl, Mollie webhook)
+        // Allow non-browser requests (curl, Mollie webhook, camera Pi, etc.)
         if (!origin) return cb(null, true);
         if (allowedOrigins.includes(origin)) return cb(null, true);
         return cb(new Error(`CORS blocked for origin: ${origin}`), false);
@@ -194,9 +193,11 @@ app.post('/api/play/claim', async (req, res) => {
             return res.status(202).json({ ok: false, status: 'pending' });
         }
 
-        // ✅ Ensure queue is started even if webhook was late or nodemon restarted.
-        game.maybeStartNext();
-        game.broadcastQueue();
+// ✅ Ensure queue is started even if webhook was late or nodemon restarted.
+game.maybeStartNext();
+game.broadcastQueue();
+
+
 
         // Re-read so status/credits are fresh after maybeStartNext()
         donation = getIntent(intentId);
@@ -316,6 +317,54 @@ app.post('/api/control/grab', (req, res) => {
 });
 
 /**
+ * Receive core value from the camera Pi over HTTP.
+ * Body: { value, label? }
+ * - value: numeric delta to apply to the sugar index
+ * - label: item name ("Cola", "Insuline", ...)
+ *
+ * coreSerial.applyCoreValue():
+ *   - updates in-memory sugar index
+ *   - stores lastEffect + lastLabel
+ *   - broadcasts 'sugar-update' via Pusher to the web UI
+ */
+app.post('/api/core-value', (req, res) => {
+    try {
+        const { value, label } = req.body || {};
+
+        if (value === undefined || value === null) {
+            return res.status(400).json({ ok: false, error: 'value_required' });
+        }
+
+        coreSerial.applyCoreValue({ value, label });
+
+        return res.json({ ok: true });
+    } catch (err) {
+        console.error('Core value error:', err);
+        return res.status(500).json({ ok: false, error: 'core_value_failed' });
+    }
+});
+
+/**
+ * Sugar state snapshot for the Graphic page.
+ * - Used on initial load (before realtime Pusher updates arrive).
+ * - Data is provided by coreSerial (index, effect, lastLabel, updatedAt).
+ */
+app.get('/api/sugar', (req, res) => {
+    // Hard-disable caching so the UI always sees fresh values
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    res.set('Surrogate-Control', 'no-store');
+
+    const state = coreSerial.getSugarState();
+
+    return res.json({
+        ok: true,
+        ...state,
+    });
+});
+
+/**
  * Get current player by token
  * Query: ?token=xxx
  */
@@ -344,9 +393,7 @@ app.get('/api/me', (req, res) => {
     });
 });
 
-
 app.use('/api/admin', createAdminRouter(game));
-
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {

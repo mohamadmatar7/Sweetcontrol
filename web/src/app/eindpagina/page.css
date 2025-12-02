@@ -1,0 +1,18 @@
+.creators-grid {
+  display: flex;
+  gap: 1rem;
+
+  .creator-card {
+    flex-shrink: 0;
+    flex-basis: 1;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .creator-card > div {
+    aspect-ratio: 1;
+    width: 100%;
+  }
+}

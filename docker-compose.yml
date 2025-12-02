@@ -16,6 +16,7 @@ services:
       - PUBLIC_WEB_URL=${PUBLIC_WEB_URL}
       - PUBLIC_API_URL=${PUBLIC_API_URL}
       - ADMIN_TOKEN=${ADMIN_TOKEN}
+      - SUGAR_FEED_SECRET=${SUGAR_FEED_SECRET}
     volumes:
       - ./api:/usr/src/app
       - sweetpi_core_node_modules:/usr/src/app/node_modules
