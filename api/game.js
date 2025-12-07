@@ -9,7 +9,10 @@ const {
     requeueToEnd,
     markCreditsPulsed,
     db, // use db only for boot recovery
+    getIntent, // ← added for reading name/email after payment
 } = require('./db');
+
+const { sendThankYouEmail } = require('./mailer');
 
 const pusher = new Pusher({
     appId: process.env.SOKETI_APP_ID,
@@ -539,9 +542,25 @@ function getActiveState() {
 /**
  * Called when Mollie confirms payment.
  */
+// function handlePaidDonation({ intentId, molliePaymentId, amountEur }) {
+//     const creditsTotal = Math.min(5, Math.floor(amountEur));
+
+//     markIntentPaid({
+//         intentId,
+//         molliePaymentId,
+//         amountEur,
+//         creditsTotal,
+//     });
+
+//     maybeStartNext();
+//     broadcastQueue();
+
+//     return { creditsTotal };
+// }
 function handlePaidDonation({ intentId, molliePaymentId, amountEur }) {
     const creditsTotal = Math.min(5, Math.floor(amountEur));
 
+    // Mark as paid and move player into the queue
     markIntentPaid({
         intentId,
         molliePaymentId,
@@ -549,11 +568,33 @@ function handlePaidDonation({ intentId, molliePaymentId, amountEur }) {
         creditsTotal,
     });
 
+    // Read the latest donation row (includes name + email + credits)
+    const donation = getIntent(intentId);
+
+    // Fire-and-forget thank-you email:
+    // - Only if the player provided an email address
+    // - Never block game flow or crash on SMTP errors
+    if (donation && donation.email) {
+        const seconds = creditsTotal * (CREDIT_MS / 1000);
+
+        sendThankYouEmail(
+            donation.email,
+            donation.name,
+            amountEur.toFixed(2),
+            creditsTotal,
+            seconds
+        ).catch((err) => {
+            // Log only; gameplay must never fail because of email
+            console.error('sendThankYouEmail failed:', err);
+        });
+    }
+
     maybeStartNext();
     broadcastQueue();
 
     return { creditsTotal };
 }
+
 
 /**
  * Realtime heartbeat:

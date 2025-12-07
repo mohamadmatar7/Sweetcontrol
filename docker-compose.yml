@@ -17,6 +17,12 @@ services:
       - PUBLIC_API_URL=${PUBLIC_API_URL}
       - ADMIN_TOKEN=${ADMIN_TOKEN}
       - SUGAR_FEED_SECRET=${SUGAR_FEED_SECRET}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - SMTP_FROM=${SMTP_FROM}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_HOST=${SMTP_HOST}
+      - NODEMAILER_DEBUG=${NODEMAILER_DEBUG}
     volumes:
       - ./api:/usr/src/app
       - sweetpi_core_node_modules:/usr/src/app/node_modules

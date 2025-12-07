@@ -149,6 +149,14 @@ NEXT_PUBLIC_SOKETI_WS_PORT=443
 # Admin
 ADMIN_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxx
 
+# Combell SMTP settings (Nodemailer)
+SMTP_HOST=
+SMTP_PORT=
+SMTP_USER=info@sweetcontrol.be
+SMTP_PASS=xxxxxxxxxxx
+SMTP_FROM="SweetControl <info@sweetcontrol.be>"
+NODEMAILER_DEBUG=true
+
 ```
 
 The SQLite database lives under:
