@@ -14,7 +14,7 @@ export default function Homepage() {
           {/* INFO BLOCKS */}
           <div className="space-y-4 md:space-y-5 md:h-full flex flex-col">
             {/* 1) Diabetes -> Warmste Week */}
-            <Link href="/warm" className="flex items-stretch w-full">
+            <Link href="/warmste-week" className="flex items-stretch w-full">
               <div className="w-full py-3 md:py-4 rounded-lg bg-[#7bb4ff] hover:bg-[#6da2e6] hover:opacity-90 transition disabled:opacity-60 active:scale-95 text-white font-black text-lg md:text-xl flex items-center justify-center gap-2">
                 <span>📖</span>
                 <span>Ontdek het verhaal</span>

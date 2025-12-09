@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 const page = () => {
   const router = useRouter();
   const handleClick = () => {
-    router.push("/HTP");
+    router.push("/how-to-play");
   };
 
   return (
