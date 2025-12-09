@@ -28,3 +28,18 @@ a:hover {
   font-weight: 700;
   font-style: normal;
 }
+
+
+.chewy-regular {
+  font-family: "Chewy", cursive;
+  font-weight: 700;
+  font-style: normal;
+  letter-spacing: 3px;
+}
+
+h1,
+h2 {
+  font-family: "Chewy", cursive;
+  font-weight: 700;
+  font-style: normal;
+}
