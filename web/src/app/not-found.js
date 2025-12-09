@@ -21,7 +21,7 @@ export default function NotFound() {
             </p>
 
             <div className="flex flex-col items-center gap-1 mb-3">
-              <span className="jersey-10-regular text-[3rem] sm:text-[3.8rem] md:text-[4.4rem] leading-none text-[#2c0f74]">
+              <span className="text-[3rem] sm:text-[3.8rem] md:text-[4.4rem] leading-none text-[#2c0f74]">
                 404
               </span>
               <span className="text-sm sm:text-base text-slate-700">
