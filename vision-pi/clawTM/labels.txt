@@ -1,0 +1,5 @@
+0 Insuline
+1 Cola
+2 Nike
+3 Appel
+4 Niets

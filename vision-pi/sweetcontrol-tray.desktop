@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=SweetControl Tray Detector
+Comment=Run TM-based tray detection
+Exec=/home/emile/clawTM/run_live.sh
+Path=/home/emile/clawTM
+Terminal=true
+Icon=utilities-terminal
+Categories=Utility;
