@@ -24,17 +24,17 @@ The Vision Pi uses a USB camera and TensorFlow Lite machine learning model to cl
   - Manages LED matrix flashing during tray operations
   - Provides smooth servo movements with mirrored positioning
 
-- **`start_grafiek.sh`** - Browser launcher script that opens a fullscreen Chromium window displaying the sugar graph
+- **`start_grafiek.sh`** - Browser launcher script that opens a fullscreen Chromium window displaying the sugar graph (kiosk mode)
 
-- **`sweetcontrol-tray.desktop`** - Desktop entry for easy launching of the tray detection system
+- **`sweetcontrol-tray.desktop`** - Desktop entry for easy launching of the tray detection system (during debugging or maintenance)
 
 ## Detected Objects
 
 The system can classify the following objects:
-- **Insuline** (Insulin)
+- **Insuline**
 - **Cola**
 - **Nike**
-- **Appel** (Apple)
+- **Appel**
 - **Niets** (Nothing/Empty)
 
 ## Features
