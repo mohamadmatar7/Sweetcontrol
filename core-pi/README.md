@@ -1,4 +1,4 @@
-## SweetControl
+## SweetControl Core
 
 SweetControl is a two-container setup:
 
