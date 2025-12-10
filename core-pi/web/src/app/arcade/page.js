@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Pusher from "pusher-js";
 import Controls from "./../components/Controls";
+import Hippo from "../components/Hippo";
+import Footer from "../components/Footer";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -41,11 +43,22 @@ export default function ArcadePage() {
   // Sequence increments whenever a new credit starts (used to reset Controls state)
   const [creditSeq, setCreditSeq] = useState(0);
 
+  // NEW: UI-only flag to show "session ended" screen before redirect
+  const [sessionEnded, setSessionEnded] = useState(false);
+
+  // Keep latest "me.id" in a ref for Pusher callbacks
   const meIdRef = useRef(null);
   useEffect(() => {
     meIdRef.current = me?.id ?? null;
   }, [me?.id]);
 
+  // Keep the current token in a ref so we can compare against localStorage safely
+  const tokenRef = useRef(null);
+  useEffect(() => {
+    tokenRef.current = token;
+  }, [token]);
+
+  // Initial token load from localStorage
   useEffect(() => {
     const t = localStorage.getItem(TOKEN_KEY);
     if (!t) {
@@ -93,6 +106,59 @@ export default function ArcadePage() {
     return me && me.status === "active" && activeDonationId === me.id;
   }, [me, activeDonationId]);
 
+  // Polling fallback to keep queue + "me" in sync (even if websocket drops)
+  useEffect(() => {
+    if (!token) return;
+
+    const poll = setInterval(async () => {
+      try {
+        // Queue snapshot
+        const qRes = await fetch(
+          `${API_BASE_URL}/api/queue?t=${Date.now()}`,
+          {
+            cache: "no-store",
+          }
+        );
+        if (qRes.ok) {
+          const qData = await qRes.json();
+          setQueue(qData.queue || []);
+          setActiveDonationId(qData.activeDonationId || null);
+          setFirstMoveDeadline(qData.firstMoveDeadline || null);
+        }
+
+        // Fresh "me" snapshot
+        const meRes = await fetch(
+          `${API_BASE_URL}/api/me?token=${token}&t=${Date.now()}`,
+          { cache: "no-store" }
+        );
+
+        if (meRes.ok) {
+          const meData = await meRes.json();
+          setMe(meData);
+          prevCreditsRef.current = meData.creditsRemaining;
+        } else if (meRes.status === 403 || meRes.status === 404) {
+          // Token is no longer valid for THIS tab's token.
+          // We only clear localStorage if it still matches the token this tab is using.
+          const currentStorageToken =
+            typeof window !== "undefined"
+              ? localStorage.getItem(TOKEN_KEY)
+              : null;
+
+          if (currentStorageToken && currentStorageToken === tokenRef.current) {
+            localStorage.removeItem(TOKEN_KEY);
+          }
+
+          router.replace("/");
+        }
+      } catch {
+        // Ignore polling errors silently (weak networks, etc.)
+      }
+    }, 5000);
+
+    return () => clearInterval(poll);
+  }, [token, router]);
+
+  // First-move countdown handling
   useEffect(() => {
     if (firstMoveIntervalRef.current) {
       clearInterval(firstMoveIntervalRef.current);
@@ -123,6 +189,7 @@ export default function ArcadePage() {
     };
   }, [isActive, timerRunning, firstMoveDeadline]);
 
+  // Initial load + Pusher realtime bindings
   useEffect(() => {
     if (!token) return;
 
@@ -130,9 +197,27 @@ export default function ArcadePage() {
     let channel;
 
     async function loadInitial() {
-      const meRes = await fetch(`${API_BASE_URL}/api/me?token=${token}`);
+      // 1) Load queue snapshot first
+      const qRes = await fetch(
+        `${API_BASE_URL}/api/queue?t=${Date.now()}`,
+        {
+          cache: "no-store",
+        }
+      );
+      const qData = await qRes.json();
+
+      setQueue(qData.queue || []);
+      setActiveDonationId(qData.activeDonationId || null);
+      setFirstMoveDeadline(qData.firstMoveDeadline || null);
+
+      // 2) Then load "me" so we see updated DB status
+      const meRes = await fetch(
+        `${API_BASE_URL}/api/me?token=${token}&t=${Date.now()}`,
+        { cache: "no-store" }
+      );
       if (!meRes.ok) {
-        localStorage.removeItem(TOKEN_KEY);
+        // If our token no longer works, don't touch localStorage here.
+        // Just redirect this tab away.
         router.replace("/");
         return;
       }
@@ -141,18 +226,12 @@ export default function ArcadePage() {
       setMe(meData);
       prevCreditsRef.current = meData.creditsRemaining;
 
-      const qRes = await fetch(`${API_BASE_URL}/api/queue`);
-      const qData = await qRes.json();
-
-      setQueue(qData.queue || []);
-      setActiveDonationId(qData.activeDonationId || null);
-      setFirstMoveDeadline(qData.firstMoveDeadline || null);
-
+      // 3) If this player is active, sync timer correctly
       if (meData.status === "active" && qData.activeDonationId === meData.id) {
         if (qData.creditEndsAt) {
           startTimerWithEndsAt(qData.creditEndsAt);
         } else {
-          // Active but no credit running yet => new credit cycle
+          // Active but no running credit yet => new credit cycle
           setCreditSeq((s) => s + 1);
         }
       }
@@ -171,6 +250,7 @@ export default function ArcadePage() {
 
     channel = pusher.subscribe("public-chat");
 
+    // Queue updates (any change to queue / active donation)
     channel.bind("queue-update", (payload) => {
       setQueue(payload.queue || []);
       setActiveDonationId(payload.activeDonationId || null);
@@ -203,6 +283,7 @@ export default function ArcadePage() {
       });
     });
 
+    // A player has become active
     channel.bind("player-start", (payload) => {
       setActiveDonationId(payload.donationId);
       setFirstMoveDeadline(payload.firstMoveDeadline || null);
@@ -219,27 +300,43 @@ export default function ArcadePage() {
       });
     });
 
+    // A new credit has started (timer sync)
     channel.bind("credit-start", (payload) => {
       if (payload.donationId === meIdRef.current) {
         startTimerWithEndsAt(payload.creditEndsAt);
       }
     });
 
+    // Player timed out without first move
     channel.bind("player-timeout", (payload) => {
       if (payload.donationId === meIdRef.current) {
         stopTimer();
         showNotice(
           "error",
-          "You were moved back to the queue because you did not move in time."
+          "Your turn expired because you did not move in time."
         );
       }
     });
 
+    // Player session ended completely
     channel.bind("player-end", (payload) => {
       if (payload.donationId === meIdRef.current) {
         stopTimer();
-        localStorage.removeItem(TOKEN_KEY);
-        setTimeout(() => router.replace("/"), 2500);
+
+        // NEW: show a short "session ended" screen before redirecting home
+        setSessionEnded(true);
+
+        // Again, only clear localStorage if it still holds this tab's token.
+        const currentStorageToken =
+          typeof window !== "undefined"
+            ? localStorage.getItem(TOKEN_KEY)
+            : null;
+
+        if (currentStorageToken && currentStorageToken === tokenRef.current) {
+          localStorage.removeItem(TOKEN_KEY);
+        }
+
+        setTimeout(() => router.replace("/"), 7000);
       }
     });
 
@@ -266,129 +363,229 @@ export default function ArcadePage() {
     return idx >= 0 ? idx + 1 : null;
   }, [me, queue]);
 
+  const visibleQueue = useMemo(() => {
+    if (!queue || queue.length === 0) return [];
+    if (!me) return queue.slice(0, 4);
+
+    const idx = queue.findIndex((q) => q.id === me.id);
+    if (idx === -1) {
+      // If I'm not in the queue, just show top 4
+      return queue.slice(0, 4);
+    }
+
+    const start = Math.max(0, idx - 3); // 3 before you at most
+    return queue.slice(start, idx + 1);
+  }, [queue, me]);
+
   if (!me) {
     return (
-      <main className="min-h-screen bg-slate-900 text-slate-100 flex items-center justify-center">
-        Loading…
+      <main className="min-h-screen bg-gradient-to-br from-[#5a3ffb] to-[#2c0f74] text-slate-100 flex items-center justify-center px-4">
+        <div className="w-full max-w-md bg-[#050816]/90 border border-white/15 rounded-3xl px-6 py-6 shadow-[0_0_40px_rgba(0,0,0,0.85)] text-center">
+          Laden...
+        </div>
       </main>
     );
   }
 
-  return (
-    <main className="min-h-screen bg-slate-900 text-slate-100 px-4 py-6">
-      {notice && (
-        <div
-          className={`max-w-5xl mx-auto mb-4 p-3 rounded-xl text-sm font-semibold
-                    ${
-                      notice.type === "error"
-                        ? "bg-red-600/20 border border-red-500 text-red-200"
-                        : "bg-slate-700/40 border border-slate-500 text-slate-100"
-                    }`}>
-          {notice.text}
-        </div>
-      )}
-
-      <header className="max-w-5xl mx-auto flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-extrabold">🕹️ Live Arcade</h1>
-        <div className="text-sm text-slate-300">
-          Player: <span className="font-bold">{me.name}</span>
-        </div>
-      </header>
-
-      <div className="max-w-5xl mx-auto grid md:grid-cols-2 gap-6">
-        <section className="bg-slate-800 rounded-2xl p-5">
-          <h2 className="text-lg font-bold mb-3">Queue</h2>
-
-          <div className="space-y-2">
-            {queue.length === 0 && (
-              <div className="text-slate-400 text-sm">No players yet.</div>
-            )}
-
-            {queue.map((p) => (
-              <div
-                key={p.id}
-                className={`flex items-center justify-between p-3 rounded-xl ${
-                  p.status === "active"
-                    ? "bg-emerald-700/30 border border-emerald-500"
-                    : "bg-slate-900"
-                }`}>
-                <div>
-                  <div className="font-semibold">
-                    {p.position}. {p.name}
-                  </div>
-                  <div className="text-xs text-slate-400">
-                    Credits: {p.creditsRemaining}
-                  </div>
-                </div>
-
-                <div className="text-xs">
-                  {p.status === "active" ? "PLAYING" : "WAITING"}
-                </div>
+  // Session ended screen shown briefly before redirecting home
+  if (sessionEnded) {
+    return (
+      <main className="min-h-screen bg-gradient-to-br from-[#5a3ffb] to-[#2c0f74] text-slate-100 flex justify-center p-2">
+        <div className="w-full max-w-3xl flex flex-col items-center justify-center">
+          <Hippo>
+            <div className="relative w-full mt-6 md:mt-8">
+              <div className="relative bg-gradient-to-br from-white to-white/90 rounded-[2.5rem] shadow-lg px-6 py-7 md:px-8 md:py-9 border border-white/70 text-[#141326] text-center">
+                <p className="text-xs sm:text-sm text-yellow-700/80 uppercase tracking-[0.16em] mb-2">
+                  spel afgelopen
+                </p>
+                <p className="text-lg sm:text-xl font-semibold text-[#2c0f74] mb-2">
+                  Bedankt om te spelen{me?.name ? `, ${me.name}` : ""}!
+                </p>
+                <p className="text-[0.75rem] sm:text-xs text-slate-500">
+                  Je sessie is afgelopen. Je wordt zo meteen teruggestuurd naar
+                  het startscherm.
+                </p>
               </div>
-            ))}
-          </div>
-
-          {!isActive && (
-            <div className="mt-4 text-sm text-slate-300">
-              {myQueuePosition
-                ? `You are in position #${myQueuePosition}. Please wait for your turn.`
-                : "You are not in the queue."}
             </div>
-          )}
-        </section>
+          </Hippo>
+          <Footer />
+        </div>
+      </main>
+    );
+  }
 
-        <section className="bg-slate-800 rounded-2xl p-5 flex flex-col items-center justify-center gap-4">
-          {!isActive && (
-            <>
-              <h2 className="text-lg font-bold">Waiting…</h2>
-              <p className="text-sm text-slate-300 text-center">
-                Controls will unlock automatically when it’s your turn.
-              </p>
-            </>
-          )}
-
-          {isActive && (
-            <>
-              <div className="text-center space-y-1">
-                <div className="text-lg font-bold text-emerald-400">
-                  Your turn! 🎯
+  // State when NOT active
+  if (!isActive) {
+    return (
+      <main className="min-h-screen bg-gradient-to-br from-[#5a3ffb] to-[#2c0f74] text-slate-100 flex justify-center p-2">
+        <div className="w-full max-w-3xl flex flex-col items-center justify-center">
+          <Hippo>
+            {/* CLOUD-LIKE WAITLIST INSIDE HIPPO */}
+            <div className="relative w-full mt-6 md:mt-8">
+              <div className="relative bg-gradient-to-br from-white to-white/90 rounded-[2.5rem] shadow-lg px-6 py-7 md:px-8 md:py-9 border border-white/70 text-[#141326]">
+                {/* Player name + status */}
+                <div className="mb-4 text-center">
+                  <p className="text-xs sm:text-sm text-yellow-700/80 uppercase tracking-[0.16em]">
+                    huidige speler
+                  </p>
+                  <p className="text-lg sm:text-xl font-semibold text-[#2c0f74]">
+                    {me.name}
+                  </p>
+                  <p className="text-[0.75rem] sm:text-xs text-slate-500 mt-1">
+                    Jouw positie in de rij:{" "}
+                    {myQueuePosition ? <b>#{myQueuePosition}</b> : "-"}
+                  </p>
                 </div>
 
-                <div className="text-sm text-slate-300">
-                  Credits remaining: <b>{me.creditsRemaining}</b>
+                <div className="rounded-2xl px-3 pb-3 sm:px-4 sm:py-4 mb-4 max-h-60 overflow-y-auto">
+                  <h2 className="text-sm sm:text-base font-semibold text-[#1b1740] mb-2 flex items-center gap-2">
+                    <span className="text-yellow-500 mx-auto">Wachtrij</span>
+                  </h2>
+
+                  <div>
+                    {visibleQueue.length === 0 && (
+                      <div className="text-slate-500 text-xs sm:text-sm">
+                        Geen spelers in de wachtrij.
+                      </div>
+                    )}
+
+                    {visibleQueue.map((p) => {
+                      const isMeRow = me && p.id === me.id;
+                      const isPlaying = p.status === "active";
+
+                      return (
+                        <div
+                          key={p.id}
+                          className={`flex items-center justify-between px-3 py-2 text-xs sm:text-sm
+                            ${
+                              isPlaying
+                                ? "bg-emerald-100 border border-emerald-300"
+                                : "bg-white border border-[#dde1ff]"
+                            }
+                            ${isMeRow ? "ring-1 ring-yellow-400/70" : ""}`}
+                        >
+                          <div>
+                            <div className="font-semibold text-[#1b1740]">
+                              {p.position}. {p.name}
+                            </div>
+                            <div className="text-[0.7rem] text-slate-500">
+                              Credits: {p.creditsRemaining}
+                            </div>
+                          </div>
+
+                          <div className="text-[0.65rem] text-right uppercase tracking-[0.16em]">
+                            <span
+                              className={
+                                isPlaying
+                                  ? "text-emerald-500"
+                                  : "text-slate-500"
+                              }
+                            >
+                              {isPlaying ? "playing" : "waiting"}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
 
-                <div className="text-sm text-slate-300">
-                  Time left this credit: <b>{secondsLeft}s</b>
-                </div>
+                <p className="text-[0.75rem] sm:text-xs text-slate-500 text-center">
+                  De machine kiest automatisch de volgende speler. Blijf even
+                  staan, je bent bijna aan de beurt.
+                </p>
+              </div>
+            </div>
+
+            {notice && (
+              <div
+                className={`mt-4 rounded-xl px-4 py-2 text-xs sm:text-sm font-semibold text-center
+                  ${
+                    notice.type === "error"
+                      ? "bg-red-600/10 border border-red-400/70 text-red-600"
+                      : "bg-[#272153]/10 border border-[#3b347c] text-[#272153]"
+                  }`}
+              >
+                {notice.text}
+              </div>
+            )}
+          </Hippo>
+          {/* FOOTER WITH LOGOS */}
+          <Footer />
+        </div>
+      </main>
+    );
+  }
+
+  // State when ACTIVE
+  return (
+    <main className="min-h-screen bg-gradient-to-br from-[#5a3ffb] to-[#2c0f74] text-slate-100 flex justify-center p-2">
+      <div className="w-full max-w-3xl flex flex-col items-center justify-center">
+        <Hippo>
+          {/* CLOUD-LIKE ACTIVE PANEL INSIDE HIPPO */}
+          <div className="relative w-full mt-6 md:mt-8">
+            <div className="relative bg-gradient-to-br from-white to-white/90 rounded-[2.5rem] shadow-lg px-3 py-7 md:px-8 md:py-9 border border-white/70 text-[#141326]">
+              {/* Header / status */}
+              <div className="text-center mb-3">
+                <p className="text-xs sm:text-sm text-yellow-700/80 uppercase tracking-[0.16em]">
+                  jouw beurt
+                </p>
+                <p className="text-xs sm:text-sm text-slate-700">
+                  Credits over: <b>{me.creditsRemaining}</b>
+                </p>
+                {timerRunning && (
+                  <p className="text-[0.7rem] sm:text-xs text-slate-500 mt-2">
+                    Tijd over deze beurt: <b>{secondsLeft}s</b>
+                  </p>
+                )}
 
                 {!timerRunning && (
-                  <div className="text-xs text-slate-400">
-                    Timer starts on your first move.
+                  <p className="text-[0.7rem] sm:text-xs text-slate-500 mt-2">
                     {firstMoveSecondsLeft !== null && (
                       <>
                         {" "}
-                        Move within <b>{firstMoveSecondsLeft}s</b> or you may be
-                        re-queued.
+                        Maak je eerste beweging in{" "}
+                        <b>{firstMoveSecondsLeft}s</b>
                       </>
                     )}
-                  </div>
+                  </p>
                 )}
               </div>
 
-              <Controls
-                token={token}
-                creditSeq={creditSeq}
-                onFirstAction={() => {
-                  // Optimistic local UX start (server will resync anyway)
-                  if (!timerRunning && !endsAtRef.current) {
-                    startTimerWithEndsAt(Date.now() + CREDIT_SECONDS * 1000);
-                  }
-                }}
-              />
-            </>
+              {/* CONTROLS INSIDE CLOUD */}
+              <div className="w-full max-w-md mx-auto">
+                <Controls
+                  token={token}
+                  creditSeq={creditSeq}
+                  onFirstAction={() => {
+                    // Optimistic local UX start (server will resync anyway)
+                    if (!timerRunning && !endsAtRef.current) {
+                      startTimerWithEndsAt(
+                        Date.now() + CREDIT_SECONDS * 1000
+                      );
+                    }
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* NOTICE UNDER CLOUD (IF ANY) */}
+          {notice && (
+            <div
+              className={`mt-4 rounded-xl px-4 py-2 text-xs sm:text-sm font-semibold text-center
+                ${
+                  notice.type === "error"
+                    ? "bg-red-600/10 border border-red-400/70 text-red-600"
+                    : "bg-[#272153]/10 border border-[#3b347c] text-[#272153]"
+                }`}
+            >
+              {notice.text}
+            </div>
           )}
-        </section>
+        </Hippo>
+        {/* FOOTER WITH LOGOS */}
+        <Footer />
       </div>
     </main>
   );
