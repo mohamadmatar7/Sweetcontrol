@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="GitHub Banner SweetControl.jpg" alt="SweetControl Banner" width="100%">
+</div>
+
 # SweetControl - Remote Claw Machine Project
 
 A fully automated, internet-controlled claw machine system that combines computer vision, real-time game management, and mobile-based remote control. Players pay and play from their mobile devices, with no physical joystick required.
