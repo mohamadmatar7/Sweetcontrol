@@ -1,11 +1,11 @@
-                                                                                            "use client";
+"use client";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Hippo from "../components/Hippo";
 import Footer from "../components/Footer";
 
-export default function HTPPage() {
+export default function HowToPlayPage() {
   const [step, setStep] = useState(0);
   const router = useRouter();
 
@@ -65,17 +65,38 @@ export default function HTPPage() {
               </h2>
 
               {/* PRETTY LIST */}
-              <ul className="space-y-3 text-sm md:text-base text-gray-800">
+              {/* <ul className="space-y-3 text-sm md:text-base text-gray-800">
                 {current.lines.map((line, index) => (
                   <li
                     key={index}
                     className=""
                   >
-                    <span className="mt-1 text-sm">✅</span>
+                    <span className="mt-1 text-sm">•</span>
                     <span className="pl-1">{line}</span>
                   </li>
                 ))}
+              </ul> */}
+
+              {/* PRETTY LIST */}
+              <ul className="space-y-2 text-sm md:text-base text-gray-800">
+                {current.lines.map((line, index) => (
+                  <li
+                    key={index}
+                    className="flex items-start gap-2"
+                  >
+                    {/* Small fixed icon */}
+                    <span className="mt-1 inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-[#ffbb00] to-[#ff3b1f] text-[0.55rem] font-bold text-amber-300">
+                      ✓
+                    </span>
+
+                    {/* Text takes remaining width and wraps nicely */}
+                    <span className="flex-1 leading-snug">
+                      {line}
+                    </span>
+                  </li>
+                ))}
               </ul>
+
 
               {/* BUTTON */}
               <button
