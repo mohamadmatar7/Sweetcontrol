@@ -1,5 +1,7 @@
 <div align="center">
-  <img src="GitHub Banner SweetControl.jpg" alt="SweetControl Banner" width="100%">
+  <a href="https://sweetcontrol.be">
+    <img src="GitHub Banner SweetControl.jpg" alt="SweetControl Banner" width="100%">
+  </a>
 </div>
 
 # SweetControl - Remote Claw Machine Project
