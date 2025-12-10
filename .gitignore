@@ -1,0 +1,60 @@
+# =========================
+# ENV files (root / web / api)
+# =========================
+core-pi/.env
+core-pi/web/.env.local
+
+.env
+.env.*
+!/\.env\.example
+!/core-pi/web/.env.example
+
+!/core-pi/api/.env.example
+
+api
+web
+core-pi/web/.env
+core-pi/web/.env.local
+core-pi/web/.env.*
+core-pi/api/.env
+core-pi/api/.env.*
+
+# =========================
+# Node / Next.js / build outputs
+# =========================
+core-pi/api/node_modules/
+core-pi/web/node_modules/
+core-pi/web/.next/
+core-pi/web/out/
+core-pi/web/dist/
+core-pi/web/build/
+**/.turbo/
+**/.cache/
+
+# Logs
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+**/pnpm-debug.log*
+**/*.log
+
+# =========================
+# SQLite DB + runtime data (api)
+# =========================
+core-pi/api/data/*.db
+core-pi/api/data/*.db-wal
+core-pi/api/data/*.db-shm
+core-pi/api/data/*.sqlite
+core-pi/api/data/*.sqlite3
+# If you want to keep empty data folder tracked:
+!core-pi/api/data/.gitkeep
+
+# =========================
+# OS / editor junk
+# =========================
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
