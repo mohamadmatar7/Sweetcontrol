@@ -7,6 +7,9 @@ services:
     working_dir: /usr/src/app
     restart: unless-stopped
     privileged: true
+    user: "0:0" 
+    devices:
+      - /dev/snd:/dev/snd
     environment:
       - PORT=4000
       - SOKETI_APP_ID=${PUSHER_APP_ID}
