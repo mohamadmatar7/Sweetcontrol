@@ -39,95 +39,20 @@ root.mainloop()
 PY
 OVERLAY_PID=$!
 
-# API health check URL (Core API endpoint)
-API_URL="${CORE_API_URL:-https://sweet-api.sweetcontrol.be/api/sugar}"
-CHECK_INTERVAL=10  # Check every 10 seconds
-MAX_FAILURES=3     # Restart after 3 consecutive failures
-CHROMIUM_PID=""    # Will be set when Chromium starts
+# Wait 60 seconds with black overlay
+sleep 60
 
-# Function to check if Core API is accessible
-check_api_health() {
-  # Use curl with timeout to check API
-  # Returns 0 if API is healthy, 1 if there's an error (Cloudflare error, connection failure, etc.)
-  local response
-  response=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "$API_URL" 2>/dev/null)
-  
-  # HTTP 200-299 = healthy
-  # HTTP 502, 503, 504 = Cloudflare/backend errors
-  # HTTP 000 = connection failure/timeout
-  if [[ "$response" =~ ^[2][0-9][0-9]$ ]]; then
-    return 0  # Healthy
-  else
-    echo "[MONITOR] API check failed: HTTP $response"
-    return 1  # Unhealthy
-  fi
-}
+# Start Chromium
+chromium \
+  --no-default-browser-check \
+  --no-first-run \
+  --password-store=basic \
+  --disable-session-crashed-bubble \
+  --disable-infobars \
+  --user-data-dir=/home/emile/.config/chromium-sweetgrafiek \
+  --start-fullscreen \
+  "https://sweet-web.sweetcontrol.be/graph" &
 
-# Function to start Chromium
-start_chromium() {
-  chromium \
-    --no-default-browser-check \
-    --no-first-run \
-    --password-store=basic \
-    --disable-session-crashed-bubble \
-    --disable-infobars \
-    --user-data-dir=/home/emile/.config/chromium-sweetgrafiek \
-    --start-fullscreen \
-    "https://sweet-web.sweetcontrol.be/grafiek" &
-  CHROMIUM_PID=$!
-  echo "[MONITOR] Chromium started with PID $CHROMIUM_PID"
-}
-
-# Function to kill Chromium
-kill_chromium() {
-  if [[ -n "$CHROMIUM_PID" ]] && kill -0 "$CHROMIUM_PID" 2>/dev/null; then
-    echo "[MONITOR] Killing Chromium (PID $CHROMIUM_PID)"
-    kill "$CHROMIUM_PID" 2>/dev/null || true
-    sleep 2
-    # Force kill if still running
-    kill -9 "$CHROMIUM_PID" 2>/dev/null || true
-  fi
-  # Also kill any remaining chromium processes
-  pkill -f "chromium.*sweet-web.sweetcontrol.be" 2>/dev/null || true
-  sleep 1
-}
-
-# Start Chromium initially
-start_chromium
-
-# Keep overlay for at least 5 seconds to cover the desktop
-sleep 7
+# Wait 5 seconds after Chrome opens, then remove overlay
+sleep 5
 kill $OVERLAY_PID 2>/dev/null || true
-
-# Monitoring loop
-failure_count=0
-while true; do
-  sleep "$CHECK_INTERVAL"
-  
-  # Check if Chromium process is still running
-  if ! kill -0 "$CHROMIUM_PID" 2>/dev/null; then
-    echo "[MONITOR] Chromium process not found, restarting..."
-    failure_count=$MAX_FAILURES  # Force restart
-  else
-    # Check API health
-    if check_api_health; then
-      # API is healthy, reset failure count
-      if [[ $failure_count -gt 0 ]]; then
-        echo "[MONITOR] API is healthy again, resetting failure count"
-      fi
-      failure_count=0
-    else
-      failure_count=$((failure_count + 1))
-      echo "[MONITOR] API check failed ($failure_count/$MAX_FAILURES)"
-    fi
-  fi
-  
-  # Restart Chromium if we've hit the failure threshold
-  if [[ $failure_count -ge $MAX_FAILURES ]]; then
-    echo "[MONITOR] Restarting Chromium due to API failures or process crash"
-    kill_chromium
-    sleep 2
-    start_chromium
-    failure_count=0
-  fi
-done
