@@ -9,7 +9,7 @@ export default function Footer() {
   const isTeamPage = pathname === "/team";
 
   return (
-    <footer className="w-full mt-1 mb-3 px-1 mx-auto">
+    <footer className="w-full max-w-3xl mt-1 mb-3 px-1 mx-auto">
       <div className="flex items-center justify-between gap-4">
         {/* Left logo */}
         <div className="flex items-center justify-center">
