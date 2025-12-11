@@ -52,11 +52,13 @@ CORE_URL = os.environ.get(
 
 # Mapping from label -> numeric effect value sent to Core API
 VALUE_MAP = {
-    "Insuline": -99,
+    "Insulin": -99,
     "Cola": 82,
-    "Nike": -47,
-    "Appel": 21,
-    # "Niets" deliberately has no numeric value
+    "Shoe": -47,
+    "Apple": 21,
+    "Donut": 50,  # New label - adjust value as needed
+    "Weight": -30,  # New label - adjust value as needed
+    # "Nothing" deliberately has no numeric value
 }
 
 
@@ -104,7 +106,7 @@ def load_labels(path):
 
 def is_empty_label(label: str) -> bool:
     """Return True if the label is considered 'empty' / no-object."""
-    return label.strip().lower() in ("niets", "empty", "none")
+    return label.strip().lower() in ("nothing", "niets", "empty", "none")
 
 
 def find_arduino():
