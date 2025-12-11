@@ -5,6 +5,7 @@ const gpio = require('./gpio');
 const game = require('./game');
 const createAdminRouter = require('./admin');
 const coreSerial = require('./coreSerial'); // Core sugar state (index/effect/label)
+const sfx = require('./sfx');
 
 const {
     createIntent,
@@ -68,6 +69,7 @@ function armAutoRelease(direction) {
 
     const t = setTimeout(() => {
         gpio.release(direction);
+        sfx.onMoveRelease(direction);
         holdTimers.delete(direction);
     }, MAX_HOLD_MS);
 
@@ -262,6 +264,7 @@ app.post('/api/control/press', (req, res) => {
 
     // Start holding the direction
     gpio.hold(direction);
+    sfx.onMovePress(direction);
 
     // Safety watchdog: auto-release if release packet is lost
     armAutoRelease(direction);
@@ -292,6 +295,7 @@ app.post('/api/control/release', (req, res) => {
     }
 
     gpio.release(direction);
+    sfx.onMoveRelease(direction);
     return res.json({ ok: true });
 });
 
@@ -312,6 +316,8 @@ app.post('/api/control/grab', (req, res) => {
     if (!result.ok) {
         return res.status(403).json({ error: result.error });
     }
+
+    sfx.playGrab();
 
     return res.json({ ok: true });
 });

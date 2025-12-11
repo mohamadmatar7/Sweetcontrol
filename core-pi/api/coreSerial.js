@@ -1,6 +1,7 @@
 // Keeps in-memory sugar index state and broadcasts changes via Pusher.
 
 const Pusher = require('pusher');
+const sfx = require('./sfx');
 
 const pusher = new Pusher({
   appId: process.env.SOKETI_APP_ID,
@@ -69,6 +70,7 @@ function applyCoreValue({ value, label }) {
     updatedAt,
   };
 
+  sfx.playScanned();
   safeTrigger('public-chat', 'sugar-update', payload);
 }
 

@@ -1,5 +1,6 @@
 const gpio = require('./gpio');
 const Pusher = require('pusher');
+const sfx = require('./sfx');
 
 const {
     markIntentPaid,
@@ -201,6 +202,7 @@ function maybeStartNext() {
                 if (active.timer) clearTimeout(active.timer);
                 if (active.firstMoveTimer) clearTimeout(active.firstMoveTimer);
                 gpio.releaseAll();
+                sfx.stopAllMoves();
                 active = null;
             }
         } catch (err) {
@@ -353,6 +355,7 @@ function scheduleFirstMoveTimeout() {
 
             // Make sure no movement stays stuck
             gpio.releaseAll();
+            sfx.stopAllMoves();
 
             // Move this player to the end of the queue with status "waiting"
             requeueToEnd(timedOutDonationId);
@@ -511,6 +514,7 @@ function endActivePlayer() {
     if (active.firstMoveTimer) clearTimeout(active.firstMoveTimer);
 
     gpio.releaseAll();
+    sfx.stopAllMoves();
     setDonationStatus(active.donationId, 'done');
 
     safeTrigger('public-chat', 'player-end', {
