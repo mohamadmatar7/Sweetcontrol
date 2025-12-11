@@ -5,6 +5,10 @@ const path = require('path');
 // Audio player binary (can be overridden via env)
 const PLAYER_BIN = process.env.SFX_PLAYER || 'mpg123';
 
+// Volume/gain setting (0-100 is normal range, can go higher for louder)
+// Default to 150 (1.5x volume) - can be overridden via SFX_VOLUME env var
+const SFX_VOLUME = process.env.SFX_VOLUME ? parseInt(process.env.SFX_VOLUME, 10) : 150;
+
 // Default audio output arguments (tuned for your container setup)
 // Example: mpg123 -o alsa -a plughw:2,0 ...
 const DEFAULT_PLAYER_ARGS = ['-o', 'alsa', '-a', 'plughw:2,0'];
@@ -53,8 +57,9 @@ function ensureFile(key) {
  */
 function spawnPlayer(args, label) {
   try {
-    // Prepend global audio args (device/driver) before specific args
-    const fullArgs = [...PLAYER_EXTRA_ARGS, ...args];
+    // Add volume/gain setting (-g flag for mpg123)
+    // Prepend global audio args (device/driver) before volume and specific args
+    const fullArgs = [...PLAYER_EXTRA_ARGS, '-g', String(SFX_VOLUME), ...args];
 
     const child = spawn(PLAYER_BIN, fullArgs, {
       stdio: 'ignore', // no stdout/stderr noise in logs
