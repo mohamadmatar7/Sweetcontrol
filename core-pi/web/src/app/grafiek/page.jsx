@@ -35,6 +35,17 @@ const COLORS = {
   axisBlue: '#76A6FB', 
 };
 
+// Translation mapping: English labels (from model) -> Dutch labels (for display)
+const LABEL_TRANSLATIONS = {
+  'Apple': 'Appel',
+  'Cola': 'Cola',
+  'Nothing': 'Niets',
+  'Donut': 'Donut',
+  'Shoe': 'Schoen',
+  'Insulin': 'Insuline',
+  'Weight': 'Gewicht',
+};
+
 export default function GraphicPage() {
   const [sugarState, setSugarState] = useState(null);
   const [history, setHistory] = useState([]);
@@ -97,7 +108,9 @@ export default function GraphicPage() {
   }, []);
 
   const currentVal = sugarState?.index ?? null;
-  const scannedObject = sugarState?.lastLabel ?? null;
+  const scannedObjectRaw = sugarState?.lastLabel ?? null;
+  // Translate English label to Dutch for display
+  const scannedObject = scannedObjectRaw ? (LABEL_TRANSLATIONS[scannedObjectRaw] || scannedObjectRaw) : null;
   const isDanger = currentVal && (currentVal < 70 || currentVal > 200);
 
   // --- CUSTOM PLUGIN ---
