@@ -22,9 +22,11 @@ pkill pcmanfm 2>/dev/null || true
 xsetroot -solid black 2>/dev/null || true
 unclutter -idle 0.1 -root 2>/dev/null &
 
-# Fullscreen black overlay (tkinter)
+# Fullscreen black overlay (tkinter) with text
 python3 - <<'PY' &
 import tkinter as tk
+from tkinter import font
+
 root = tk.Tk()
 root.configure(bg='black')
 root.overrideredirect(True)
@@ -33,6 +35,17 @@ root.attributes('-topmost', True)
 w, h = root.winfo_screenwidth(), root.winfo_screenheight()
 root.geometry(f"{w}x{h}+0+0")
 root.attributes('-fullscreen', True)
+
+# Add text label
+label = tk.Label(
+    root,
+    text="Even geduld, de machine is aan het opstarten",
+    bg='black',
+    fg='white',
+    font=('Arial', 24, 'normal')
+)
+label.place(relx=0.5, rely=0.5, anchor='center')
+
 root.update_idletasks()
 root.after(300000, root.destroy)  # safety timeout
 root.mainloop()
