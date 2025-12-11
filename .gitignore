@@ -11,8 +11,6 @@ core-pi/web/.env.local
 
 !/core-pi/api/.env.example
 
-api
-web
 core-pi/web/.env
 core-pi/web/.env.local
 core-pi/web/.env.*
