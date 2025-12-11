@@ -190,18 +190,18 @@ export default function ArcadePage() {
 
   // --- VISUAL LOGIC ---
   // Determine which Hippo image, text, and animations to show based on status
-  let hippoImage = "/images/hippo-happy.png"; 
+  let hippoImage = "/hippo-happy.png"; 
   let speechText = "ALLES GOED!";
   let bubbleBgAnimation = ""; 
   let hippoAnimation = "animate-breathe"; // Gentle breathing by default
 
   if (isHigh) {
-    hippoImage = "/images/hippo-sick.png";
+    hippoImage = "/hippo-sick.png";
     speechText = "HELP! TE HOOG!";
     hippoAnimation = "animate-shake"; // Fast shaking for high sugar
     bubbleBgAnimation = "animate-wobble-hard"; 
   } else if (isLow) {
-    hippoImage = "/images/hippo-sad.png";
+    hippoImage = "/hippo-sad.png";
     speechText = "HELP! TE LAAG!";
     hippoAnimation = "animate-dizzy"; // Slow dizzy wobble for low sugar
     bubbleBgAnimation = "animate-wobble-hard";
@@ -377,7 +377,7 @@ export default function ArcadePage() {
         
         {/* LOGO: Absolute Top Right */}
         <img 
-            src="/images/dww-logo.svg" 
+            src="/dww-logo.svg" 
             alt="De Warmste Week"
             className="absolute top-4 right-4 h-16 w-auto object-contain drop-shadow-md z-30"
         />
@@ -418,7 +418,7 @@ export default function ArcadePage() {
                 {/* Information Text */}
                 <div className="text-white/90 font-jersey space-y-1 drop-shadow-md max-w-[50%]">
                      <span className="text-[#FF6B00] block uppercase tracking-wide text-lg font-bold">LIVE SUIKERSPIEGEL</span>
-                     <span className="text-sm leading-tight block opacity-80">Hou de lijn tussen de stippels!</span>
+                     <span className="text-base leading-tight block opacity-80">Hou de lijn tussen de stippels!</span>
                 </div>
 
                 {/* Live Score Box */}
