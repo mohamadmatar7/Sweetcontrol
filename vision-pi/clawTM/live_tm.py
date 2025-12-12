@@ -50,15 +50,16 @@ CORE_URL = os.environ.get(
     "https://sweet-api.sweetcontrol.be/api/core-value"
 )
 
-# Mapping from label -> numeric effect value sent to Core API
+# Mapping from label -> numeric effect value sent to Core API.
+# Keep label strings in sync with labels.txt (order does not matter).
 VALUE_MAP = {
-    "Insulin": -99,
+    "insuline": -99,
     "Cola": 82,
-    "Shoe": -47,
-    "Apple": 21,
+    "Schoen": -47,
+    "Appel": 21,
     "Donut": 50,  # New label - adjust value as needed
-    "Weight": -30,  # New label - adjust value as needed
-    # "Nothing" deliberately has no numeric value
+    "gewicht": -30,  # New label - adjust value as needed
+    # "Niks" deliberately has no numeric value
 }
 
 
@@ -106,7 +107,7 @@ def load_labels(path):
 
 def is_empty_label(label: str) -> bool:
     """Return True if the label is considered 'empty' / no-object."""
-    return label.strip().lower() in ("nothing", "niets", "empty", "none")
+    return label.strip().lower() in ("nothing", "niets", "niks", "empty", "none")
 
 
 def find_arduino():

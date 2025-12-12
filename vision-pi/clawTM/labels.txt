@@ -1,7 +1,7 @@
-0 Apple
+0 Appel
 1 Cola
-2 Nothing
+2 Niks
 3 Donut
-4 Shoe
-5 Insulin
-6 Weight
+4 Schoen
+5 insuline
+6 gewicht
