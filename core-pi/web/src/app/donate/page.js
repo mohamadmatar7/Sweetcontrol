@@ -143,7 +143,7 @@ export default function Donate() {
 
               {/* QUICK AMOUNTS */}
               <div className="flex justify-between mb-5 gap-2">
-                {[1, 2, 5].map((amount) => (
+                {[1, 3, 5].map((amount) => (
                   <button
                     key={amount}
                     type="button"
