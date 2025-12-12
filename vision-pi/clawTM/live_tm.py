@@ -16,7 +16,7 @@ LABELS_PATH = os.path.join(BASE_DIR, "labels.txt")
 # SMALL  (224,168,192,144)   # 30% area
 # MEDIUM (160,120,320,240)   # 50% area
 # LARGE  (96,72,448,336)     # 70% area
-ROI = (125, 50, 400, 350)  # x, y, w, h
+ROI = (125, 50, 420, 350)  # x, y, w, h
 
 # ---- Thresholds and timings ----
 PROB_THR       = 0.80   # min. confidence for a class
@@ -29,6 +29,8 @@ MAX_CAMERA_FAILS = 10   # consecutive read errors before restart
 TRAY_HEARTBEAT_INTERVAL = 5.0   # seconds between heartbeat PINGs
 TRAY_HEARTBEAT_TIMEOUT = 0.5    # max wait time for PONG
 MAX_TRAY_HEARTBEAT_FAILS = 10    # after so many misses -> restart
+EMPTY_UNSURE_THR = 0.50         # if empty prob stays below this...
+EMPTY_UNSURE_TIME = 20.0        # ...for this long, force a tray clear
 
 # Headless recovery prevents OpenCV windows from grabbing focus on kiosk restarts
 HEADLESS_AFTER_RECOVERY = os.environ.get(
@@ -171,6 +173,18 @@ def tray_ping(tray_ser, timeout=TRAY_HEARTBEAT_TIMEOUT):
             pass
 
 
+def send_tray_command(tray_ser):
+    """Send the TRAY command to the Arduino with proper error handling."""
+    if not tray_ser:
+        return
+    try:
+        tray_ser.write(b"TRAY\n")
+    except Exception as e:
+        raise RecoverableHardwareError(
+            f"Arduino write error: {e}"
+        ) from e
+
+
 def ensure_camera(device_index=0):
     """Open the USB camera and configure basic resolution."""
     cap = cv.VideoCapture(device_index)
@@ -306,6 +320,12 @@ def run_detection(labels, interpreter, in_det, out_det, show_window=True):
         frame_failures = 0
         last_tray_ping = 0.0
         tray_ping_failures = 0
+        empty_unsure_since = None
+
+        # Cache indices for empty labels so we can look up their probability fast
+        empty_label_indices = [
+            i for i, lbl in enumerate(labels) if is_empty_label(lbl)
+        ]
 
         if show_window:
             print("TM LIVE detect with tray + Core HTTP… (Q = quit)")
@@ -368,6 +388,11 @@ def run_detection(labels, interpreter, in_det, out_det, show_window=True):
             label_best = labels[best]
             p_best = float(probs[best])
 
+            # Track probability for "empty"/"niks" label even if it is not on top
+            p_empty = None
+            if empty_label_indices:
+                p_empty = float(np.max(probs[empty_label_indices]))
+
             # Debug: full list print every 0.5s
             if now - last_print > 0.5:
                 tops = []
@@ -401,19 +426,33 @@ def run_detection(labels, interpreter, in_det, out_det, show_window=True):
             # Only count non-empty with enough confidence
             candidate = label_best if (not empty and p_best >= PROB_THR) else None
 
+            # If the model cannot be sure the tray is empty for a long period,
+            # force a tray clear to avoid getting stuck with multiple objects.
+            if p_empty is not None:
+                if p_empty < EMPTY_UNSURE_THR:
+                    if empty_unsure_since is None:
+                        empty_unsure_since = now
+                    elif (now - empty_unsure_since) >= EMPTY_UNSURE_TIME and armed:
+                        print(
+                            f"[SAFETY] Empty confidence low ({p_empty:.2f}) for "
+                            f"{EMPTY_UNSURE_TIME:.0f}s -> forcing tray clear."
+                        )
+                        send_tray_command(tray_ser)
+                        last_drop = now
+                        empty_unsure_since = None
+                        stable_label = None
+                        stable_since = None
+                        show_text = None
+                else:
+                    empty_unsure_since = None
+
             if candidate and armed:
                 if stable_label == candidate:
                     if stable_since and (now - stable_since) >= STABLE_TIME:
                         print(f"[DROP] Object: {candidate} (p={p_best:.2f})")
 
                         # 1) Tilt tray via Arduino
-                        if tray_ser:
-                            try:
-                                tray_ser.write(b"TRAY\n")
-                            except Exception as e:
-                                raise RecoverableHardwareError(
-                                    f"Arduino write error: {e}"
-                                ) from e
+                        send_tray_command(tray_ser)
 
                         # 2) Send value + label to Core/API over HTTP
                         val = VALUE_MAP.get(candidate)
