@@ -2,26 +2,19 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-// Audio player binary (can be overridden via env)
 const PLAYER_BIN = process.env.SFX_PLAYER || 'mpg123';
 
-// Volume/gain setting (0-100 is normal range, can go higher for louder)
-// Default to 150 (1.5x volume) - can be overridden via SFX_VOLUME env var
-const SFX_VOLUME = process.env.SFX_VOLUME ? parseInt(process.env.SFX_VOLUME, 10) : 150;
+const SFX_VOLUME = process.env.SFX_VOLUME
+  ? parseInt(process.env.SFX_VOLUME, 10)
+  : 150;
 
-// Default audio output arguments (tuned for your container setup)
-// Example: mpg123 -o alsa -a plughw:2,0 ...
 const DEFAULT_PLAYER_ARGS = ['-o', 'alsa', '-a', 'plughw:2,0'];
-
-// Optional override from environment: SFX_ARGS="-o alsa -a plughw:2,0"
 const PLAYER_EXTRA_ARGS = process.env.SFX_ARGS
   ? process.env.SFX_ARGS.split(' ')
   : DEFAULT_PLAYER_ARGS;
 
-// Directory where sound files live
 const SOUND_DIR = path.join(__dirname, 'sounds');
 
-// Known sound files
 const FILES = {
   move: path.join(SOUND_DIR, 'move.mp3'),
   grab: path.join(SOUND_DIR, 'grab.mp3'),
@@ -31,19 +24,13 @@ const FILES = {
 const missingLogged = new Set();
 const activeDirections = new Set();
 
-let moveLoop = null; // currently running move player process (one-shot)
+let moveLoop = null;
 
-/**
- * Check that a sound file exists for the given key.
- * Logs a warning only once per missing key.
- */
 function ensureFile(key) {
   const file = FILES[key];
   if (!file) return null;
 
-  if (fs.existsSync(file)) {
-    return file;
-  }
+  if (fs.existsSync(file)) return file;
 
   if (!missingLogged.has(key)) {
     missingLogged.add(key);
@@ -52,18 +39,11 @@ function ensureFile(key) {
   return null;
 }
 
-/**
- * Spawn the audio player process with proper arguments.
- */
 function spawnPlayer(args, label) {
   try {
-    // Add volume/gain setting (-g flag for mpg123)
-    // Prepend global audio args (device/driver) before volume and specific args
     const fullArgs = [...PLAYER_EXTRA_ARGS, '-g', String(SFX_VOLUME), ...args];
 
-    const child = spawn(PLAYER_BIN, fullArgs, {
-      stdio: 'ignore', // no stdout/stderr noise in logs
-    });
+    const child = spawn(PLAYER_BIN, fullArgs, { stdio: 'ignore' });
 
     child.on('error', (err) => {
       console.error(`[SFX] ${label} failed:`, err?.message || err);
@@ -76,94 +56,46 @@ function spawnPlayer(args, label) {
   }
 }
 
-/**
- * Internal helper: play one "move" sound and, when it finishes,
- * restart it if at least one move direction is still active.
- */
-function playMoveOnceAndMaybeRepeat(file) {
-  // Check if we should still be playing (direction might have been released)
-  if (activeDirections.size === 0) {
-    return;
-  }
-
-  // Store reference to the process we're about to spawn
-  const currentProcess = spawnPlayer(['-q', file], 'move loop');
-
-  if (!currentProcess) {
-    return;
-  }
-
-  // Only update moveLoop if this is still the current process
-  // (prevents race condition if stopMoveLoop was called)
-  moveLoop = currentProcess;
-
-  currentProcess.on('exit', (code, signal) => {
-    // Only continue if this is still the active process and directions are still active
-    if (moveLoop === currentProcess && activeDirections.size > 0) {
-      moveLoop = null;
-      // Immediately restart the loop (no delay needed - mpg123 handles playback timing)
-      playMoveOnceAndMaybeRepeat(file);
-    } else {
-      // Process was stopped or directions were released
-      if (moveLoop === currentProcess) {
-        moveLoop = null;
-      }
-    }
-  });
-
-  // Also handle errors
-  currentProcess.on('error', (err) => {
-    if (moveLoop === currentProcess) {
-      moveLoop = null;
-      // If directions are still active, try to restart after a short delay
-      if (activeDirections.size > 0) {
-        setTimeout(() => {
-          if (activeDirections.size > 0 && !moveLoop) {
-            playMoveOnceAndMaybeRepeat(file);
-          }
-        }, 100);
-      }
-    }
-  });
-}
-
-/**
- * Start repeating the move sound (if not already running).
- * The repeat is controlled from Node instead of mpg123 -l 0.
- */
 function startMoveLoop() {
   if (moveLoop) return;
 
   const file = ensureFile('move');
   if (!file) return;
 
-  playMoveOnceAndMaybeRepeat(file);
-}
+  // Use mpg123 built-in infinite loop
+  // --loop -1 is the most reliable for "forever" across builds
+  moveLoop = spawnPlayer(['-q', '--loop', '-1', file], 'move loop');
 
-/**
- * Stop the move loop if running.
- */
-function stopMoveLoop() {
   if (moveLoop) {
-    moveLoop.kill('SIGTERM');
-    moveLoop = null;
+    moveLoop.on('exit', () => {
+      moveLoop = null;
+    });
   }
 }
 
-/**
- * Called when a movement direction is pressed.
- * Starts loop if at least one direction is active.
- */
+function stopMoveLoop() {
+  if (!moveLoop) return;
+
+  const proc = moveLoop;
+  moveLoop = null;
+
+  try {
+    proc.kill('SIGTERM');
+  } catch {}
+
+  setTimeout(() => {
+    try {
+      proc.kill('SIGKILL');
+    } catch {}
+  }, 200);
+}
+
 function onMovePress(direction) {
   if (!direction) return;
   activeDirections.add(direction);
   startMoveLoop();
 }
 
-/**
- * Called when a movement direction is released.
- * Stops loop when no directions are active.
- */
 function onMoveRelease(direction) {
   if (!direction) return;
   activeDirections.delete(direction);
@@ -172,44 +104,27 @@ function onMoveRelease(direction) {
   }
 }
 
-/**
- * Stop all movement and loop.
- */
 function stopAllMoves() {
   activeDirections.clear();
   stopMoveLoop();
 }
 
-/**
- * Play a single sound once (non-looping).
- */
 function playOnce(key) {
   const file = ensureFile(key);
   if (!file) return;
 
-  // -q: quiet mode (no console output)
   spawnPlayer(['-q', file], `${key} sfx`);
 }
 
-/**
- * Play the "grab" sound once.
- * Stops move loop first.
- */
 function playGrab() {
   stopAllMoves();
   playOnce('grab');
 }
 
-/**
- * Play the "scanned" sound once.
- */
 function playScanned() {
   playOnce('scanned');
 }
 
-/**
- * Cleanup for process shutdown.
- */
 function cleanup() {
   stopAllMoves();
 }

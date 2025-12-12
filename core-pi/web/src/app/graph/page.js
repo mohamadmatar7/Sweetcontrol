@@ -449,11 +449,11 @@ export default function ArcadePage() {
             <div className="flex items-center gap-4 w-full">
                 
                 {/* Scanned Icon */}
-                <div className="w-12 h-12 shrink-0 rounded-full bg-white flex items-center justify-center border-2 border-[#FF6B00]">
+                {/* <div className="w-12 h-12 shrink-0 rounded-full bg-white flex items-center justify-center border-2 border-[#FF6B00]">
                     <span className="text-2xl animate-breathe">
                         {currentIcon}
                     </span>
-                </div>
+                </div> */}
 
                 {/* Scanned Text */}
                 <div className="flex flex-row justify-start items-center gap-4 flex-1 ml-2 overflow-hidden">
