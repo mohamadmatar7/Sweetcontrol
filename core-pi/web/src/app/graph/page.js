@@ -353,6 +353,8 @@ export default function ArcadePage() {
           50% { transform: scale(1.03); }
         }
 
+        .text-xl { font-size: 2.25rem; }
+
         /* Animation Classes */
         .animate-shake { animation: shake 0.4s infinite; }
         .animate-wobble-hard { animation: wobble-hard 0.4s infinite; }
@@ -379,7 +381,7 @@ export default function ArcadePage() {
         <img 
             src="/dww-logo.svg" 
             alt="De Warmste Week"
-            className="absolute top-4 right-4 h-16 w-auto object-contain drop-shadow-md z-30"
+            className="absolute top-4 left-28 h-24 w-auto object-contain drop-shadow-md z-30"
         />
 
         {/* SPEECH BUBBLE: Absolute Top Left */}
@@ -416,9 +418,9 @@ export default function ArcadePage() {
             {/* Header Flexbox */}
             <div className="flex justify-between items-start mb-2 shrink-0">
                 {/* Information Text */}
-                <div className="text-white/90 font-jersey space-y-1 drop-shadow-md max-w-[50%]">
-                     <span className="text-[#FF6B00] block uppercase tracking-wide text-lg font-bold">LIVE SUIKERSPIEGEL</span>
-                     <span className="text-base leading-tight block opacity-80">Hou de lijn tussen de stippels!</span>
+                <div className="text-white/90 font-jersey space-y-1 drop-shadow-md max-w-[70%]">
+                     <span className="text-[#FF6B00] block uppercase tracking-wide text-xl font-bold">LIVE SUIKERSPIEGEL</span>
+                     <span className="text-xl leading-tight block opacity-80">Hou de lijn tussen de stippels!</span>
                 </div>
 
                 {/* Live Score Box */}
@@ -426,7 +428,7 @@ export default function ArcadePage() {
                     <span className="font-chewy text-5xl leading-none block text-right" style={{ color: THEME.accent }}>
                         {currentVal}
                     </span>
-                    <span className="font-jersey text-sm text-black block text-right">
+                    <span className="font-jersey text-lg text-black block text-right">
                         mg/dL
                     </span>
                 </div>
@@ -454,8 +456,8 @@ export default function ArcadePage() {
                 </div>
 
                 {/* Scanned Text */}
-                <div className="flex flex-col justify-center flex-1 ml-4 overflow-hidden">
-                    <span className="font-jersey text-sm text-[#FF6B00] mb-0.5 tracking-widest uppercase">
+                <div className="flex flex-row justify-start items-center gap-4 flex-1 ml-2 overflow-hidden">
+                    <span className="font-jersey text-xl text-[#FF6B00] mb-0.5 tracking-widest uppercase">
                         LAATST GEVANGEN:
                     </span>
                     <span className="font-chewy text-3xl uppercase tracking-wide text-white leading-none truncate">

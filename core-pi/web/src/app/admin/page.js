@@ -1,0 +1,606 @@
+"use client";
+
+import React, { useEffect, useMemo, useState } from "react";
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+const LS_TOKEN_KEY = "sweet_admin_token";
+
+function h(tag, props) {
+  for (var _len = arguments.length, children = new Array(_len > 2 ? _len - 2 : 0), _key = 2; _key < _len; _key++) {
+    children[_key - 2] = arguments[_key];
+  }
+  return React.createElement.apply(React, [tag, props].concat(children));
+}
+
+function fmtDate(v) {
+  try {
+    if (!v) return "-";
+    var d = new Date(v);
+    if (Number.isNaN(d.getTime())) return String(v);
+    return d.toLocaleString();
+  } catch {
+    return String(v || "-");
+  }
+}
+
+function cls() {
+  return Array.prototype.slice.call(arguments).filter(Boolean).join(" ");
+}
+
+export default function AdminPage() {
+  const [adminToken, setAdminToken] = useState("");
+  const [tokenSaved, setTokenSaved] = useState(false);
+
+  const [loading, setLoading] = useState(false);
+  const [busyId, setBusyId] = useState(null);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  const [donations, setDonations] = useState([]);
+  const [activeDonationId, setActiveDonationId] = useState(null);
+
+  const [selectedId, setSelectedId] = useState("");
+  const [delta, setDelta] = useState(1);
+  const [creditsTotal, setCreditsTotal] = useState(1);
+  const [creditsUsed, setCreditsUsed] = useState(0);
+  const [status, setStatus] = useState("waiting");
+
+  // Load token from localStorage / URL param
+  useEffect(() => {
+    try {
+      var t = localStorage.getItem(LS_TOKEN_KEY) || "";
+      var url = new URL(window.location.href);
+      var qp = url.searchParams.get("token");
+      var initial = qp || t;
+      if (initial) {
+        setAdminToken(initial);
+        setTokenSaved(!!t);
+      }
+    } catch {}
+  }, []);
+
+  // Helpers
+  function authHeaders() {
+    return {
+      "Content-Type": "application/json",
+      "x-admin-token": adminToken,
+    };
+  }
+
+  async function api(path, opts) {
+    if (!API_BASE_URL) {
+      throw new Error("Missing NEXT_PUBLIC_API_BASE_URL in env.");
+    }
+    if (!adminToken) {
+      throw new Error("Admin token is required.");
+    }
+
+    var res = await fetch(API_BASE_URL + path, Object.assign({}, opts, {
+      headers: Object.assign({}, authHeaders(), (opts && opts.headers) || {}),
+      cache: "no-store",
+    }));
+
+    var data = null;
+    try {
+      data = await res.json();
+    } catch {}
+
+    if (!res.ok) {
+      var msg = (data && data.error) ? data.error : ("Request failed (" + res.status + ")");
+      throw new Error(msg);
+    }
+
+    return data;
+  }
+
+  async function refresh() {
+    setError("");
+    setNotice("");
+    setLoading(true);
+    try {
+      var data = await api("/api/admin/donations", { method: "GET" });
+      setDonations((data && data.donations) ? data.donations : []);
+      setActiveDonationId((data && data.activeDonationId) ? data.activeDonationId : null);
+      setNotice("Updated.");
+    } catch (e) {
+      setError(e.message || "Failed.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    // Auto-load once if token exists
+    if (adminToken) refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adminToken]);
+
+  function saveToken() {
+    setError("");
+    setNotice("");
+    try {
+      localStorage.setItem(LS_TOKEN_KEY, adminToken);
+      setTokenSaved(true);
+      setNotice("Token saved locally.");
+    } catch {
+      setError("Failed to save token to localStorage.");
+    }
+  }
+
+  function clearToken() {
+    setError("");
+    setNotice("");
+    try {
+      localStorage.removeItem(LS_TOKEN_KEY);
+      setAdminToken("");
+      setTokenSaved(false);
+      setDonations([]);
+      setActiveDonationId(null);
+      setNotice("Token cleared.");
+    } catch {
+      setError("Failed to clear token.");
+    }
+  }
+
+  function pickId(id) {
+    setSelectedId(String(id));
+    var row = donations.find(function (d) { return String(d.id) === String(id); });
+    if (row) {
+      setCreditsTotal(Number(row.creditsTotal || 0));
+      setCreditsUsed(Number(row.creditsUsed || 0));
+      setStatus(String(row.status || "waiting"));
+    }
+  }
+
+  var selectedRow = useMemo(function () {
+    return donations.find(function (d) { return String(d.id) === String(selectedId); }) || null;
+  }, [donations, selectedId]);
+
+  // Actions
+  async function runAction(label, fn, idForBusy) {
+    setError("");
+    setNotice("");
+    setBusyId(idForBusy || "global");
+    try {
+      await fn();
+      setNotice(label + " ✅");
+      await refresh();
+    } catch (e) {
+      setError(e.message || "Failed.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  function actionAddCredits() {
+    return runAction("Credits updated", function () {
+      return api("/api/admin/credits/add", {
+        method: "POST",
+        body: JSON.stringify({ id: Number(selectedId), delta: Number(delta) }),
+      });
+    }, selectedId);
+  }
+
+  function actionSetTotal() {
+    return runAction("Credits total set", function () {
+      return api("/api/admin/credits/set-total", {
+        method: "POST",
+        body: JSON.stringify({ id: Number(selectedId), creditsTotal: Number(creditsTotal) }),
+      });
+    }, selectedId);
+  }
+
+  function actionSetUsed() {
+    return runAction("Credits used set", function () {
+      return api("/api/admin/credits/set-used", {
+        method: "POST",
+        body: JSON.stringify({ id: Number(selectedId), creditsUsed: Number(creditsUsed) }),
+      });
+    }, selectedId);
+  }
+
+  function actionRequeue() {
+    return runAction("Requeued", function () {
+      return api("/api/admin/requeue", {
+        method: "POST",
+        body: JSON.stringify({ id: Number(selectedId) }),
+      });
+    }, selectedId);
+  }
+
+  function actionSetStatus() {
+    return runAction("Status updated", function () {
+      return api("/api/admin/status/set", {
+        method: "POST",
+        body: JSON.stringify({ id: Number(selectedId), status: status }),
+      });
+    }, selectedId);
+  }
+
+  function actionEndActive() {
+    return runAction("Ended active player", function () {
+      return api("/api/admin/player/end-active", { method: "POST" });
+    }, "global");
+  }
+
+  function actionStartNext() {
+    return runAction("Started next player", function () {
+      return api("/api/admin/player/start-next", { method: "POST" });
+    }, "global");
+  }
+
+  function actionDeleteOne(id) {
+    return runAction("Deleted donation", function () {
+      return api("/api/admin/donations/" + Number(id), { method: "DELETE" });
+    }, id);
+  }
+
+  function actionDeleteAll() {
+    return runAction("Deleted all donations", function () {
+      return api("/api/admin/donations", { method: "DELETE" });
+    }, "global");
+  }
+
+  // UI bits
+  function Button(props) {
+    var disabled = !!props.disabled;
+    return h(
+      "button",
+      {
+        type: props.type || "button",
+        onClick: props.onClick,
+        disabled: disabled,
+        className: cls(
+          "px-3 py-2 rounded-xl font-semibold text-sm transition",
+          "border border-white/15",
+          disabled ? "opacity-50 cursor-not-allowed" : "hover:opacity-90 active:scale-[0.99]",
+          props.variant === "danger"
+            ? "bg-red-600/20 text-red-100"
+            : props.variant === "primary"
+            ? "bg-gradient-to-r from-[#ffbb00] to-[#ff3b1f] text-[#1b123a] border-amber-300/40"
+            : props.variant === "dark"
+            ? "bg-white/10 text-white"
+            : "bg-white/10 text-white",
+          props.className
+        ),
+      },
+      props.children
+    );
+  }
+
+  function Input(props) {
+    return h("input", {
+      value: props.value,
+      onChange: props.onChange,
+      placeholder: props.placeholder,
+      type: props.type || "text",
+      className: cls(
+        "w-full px-3 py-2 rounded-xl bg-white/10 text-white placeholder:text-white/40",
+        "border border-white/15 outline-none focus:border-yellow-300/60",
+        props.className
+      ),
+    });
+  }
+
+  function Select(props) {
+    return h(
+      "select",
+      {
+        value: props.value,
+        onChange: props.onChange,
+        className: cls(
+          "w-full px-3 py-2 rounded-xl bg-white/10 text-white",
+          "border border-white/15 outline-none focus:border-yellow-300/60",
+          props.className
+        ),
+      },
+      props.children
+    );
+  }
+
+  function Card(props) {
+    return h(
+      "div",
+      { className: cls("rounded-3xl border border-white/15 bg-[#050816]/70 shadow-[0_0_50px_rgba(0,0,0,0.65)]", props.className) },
+      props.children
+    );
+  }
+
+  return h(
+    "main",
+    { className: "min-h-screen bg-gradient-to-br from-[#5a3ffb] to-[#2c0f74] text-white px-4 py-8 flex justify-center" },
+    h(
+      "div",
+      { className: "w-full max-w-6xl flex flex-col gap-5" },
+
+      // Header
+      h(
+        Card,
+        { className: "px-5 py-5 sm:px-7 sm:py-6" },
+        h(
+          "div",
+          { className: "flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4" },
+          h(
+            "div",
+            null,
+            h("div", { className: "text-[0.7rem] uppercase tracking-[0.22em] text-white/70" }, "admin panel"),
+            h("div", { className: "jersey-10-regular text-3xl sm:text-4xl tracking-wide" }, "sweet control")
+          ),
+          h(
+            "div",
+            { className: "w-full sm:w-[360px] flex flex-col gap-2" },
+            h("div", { className: "text-[0.7rem] uppercase tracking-[0.22em] text-white/70" }, "admin token"),
+            h(
+              "div",
+              { className: "flex gap-2" },
+              h(Input, {
+                value: adminToken,
+                onChange: function (e) { setAdminToken(e.target.value); },
+                placeholder: "Paste ADMIN_TOKEN here",
+              }),
+              h(Button, { variant: "dark", onClick: saveToken, disabled: !adminToken }, tokenSaved ? "Saved" : "Save"),
+              h(Button, { variant: "dark", onClick: clearToken }, "Clear")
+            )
+          )
+        ),
+        h(
+          "div",
+          { className: "mt-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between" },
+          h(
+            "div",
+            { className: "text-sm text-white/80" },
+            "Active donation: ",
+            h("b", { className: "text-yellow-300" }, activeDonationId ? "#" + activeDonationId : "-")
+          ),
+          h(
+            "div",
+            { className: "flex gap-2 flex-wrap" },
+            h(Button, { variant: "dark", onClick: refresh, disabled: loading || !adminToken }, loading ? "Loading..." : "Refresh"),
+            h(Button, { variant: "dark", onClick: actionStartNext, disabled: !adminToken || busyId }, "Start next"),
+            h(Button, { variant: "danger", onClick: actionEndActive, disabled: !adminToken || busyId }, "End active"),
+            h(Button, { variant: "danger", onClick: actionDeleteAll, disabled: !adminToken || busyId }, "Delete all")
+          )
+        ),
+        (error
+          ? h("div", { className: "mt-4 rounded-2xl border border-red-400/40 bg-red-600/10 px-4 py-3 text-sm text-red-100" }, error)
+          : null),
+        (notice
+          ? h("div", { className: "mt-4 rounded-2xl border border-emerald-300/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-50" }, notice)
+          : null)
+      ),
+
+      // Main layout
+      h(
+        "div",
+        { className: "grid grid-cols-1 lg:grid-cols-[1.2fr,0.8fr] gap-5" },
+
+        // Left: table
+        h(
+          Card,
+          { className: "p-4 sm:p-5" },
+          h(
+            "div",
+            { className: "flex items-center justify-between gap-3 mb-3" },
+            h("div", null,
+              h("div", { className: "text-[0.7rem] uppercase tracking-[0.22em] text-white/70" }, "donations"),
+              h("div", { className: "text-lg font-semibold" }, "Queue & Players")
+            ),
+            h("div", { className: "text-sm text-white/70" }, "Total: ", h("b", { className: "text-white" }, String(donations.length)))
+          ),
+
+          h(
+            "div",
+            { className: "overflow-x-auto rounded-2xl border border-white/10" },
+            h(
+              "table",
+              { className: "w-full text-sm" },
+              h(
+                "thead",
+                { className: "bg-white/10 text-white/80" },
+                h(
+                  "tr",
+                  null,
+                  h("th", { className: "text-left p-3 whitespace-nowrap" }, "ID"),
+                  h("th", { className: "text-left p-3 whitespace-nowrap" }, "Name"),
+                  h("th", { className: "text-left p-3 whitespace-nowrap" }, "Status"),
+                  h("th", { className: "text-left p-3 whitespace-nowrap" }, "Credits"),
+                  h("th", { className: "text-left p-3 whitespace-nowrap" }, "Used"),
+                  h("th", { className: "text-left p-3 whitespace-nowrap" }, "Amount"),
+                  h("th", { className: "text-left p-3 whitespace-nowrap" }, "Created"),
+                  h("th", { className: "text-right p-3 whitespace-nowrap" }, "Actions")
+                )
+              ),
+              h(
+                "tbody",
+                null,
+                (donations.length === 0
+                  ? h("tr", null, h("td", { colSpan: 8, className: "p-4 text-center text-white/60" }, "No donations."))
+                  : donations.map(function (d) {
+                      var isMe = String(selectedId) === String(d.id);
+                      var isActiveRow = Number(activeDonationId) === Number(d.id) || d.status === "active";
+                      return h(
+                        "tr",
+                        {
+                          key: d.id,
+                          className: cls(
+                            "border-t border-white/10",
+                            isMe ? "bg-yellow-300/10" : "",
+                            isActiveRow ? "ring-1 ring-emerald-300/40" : ""
+                          ),
+                          onClick: function () { pickId(d.id); },
+                          style: { cursor: "pointer" },
+                        },
+                        h("td", { className: "p-3 font-semibold text-white whitespace-nowrap" }, "#" + d.id),
+                        h("td", { className: "p-3 whitespace-nowrap" }, d.name || "-"),
+                        h("td", { className: "p-3 whitespace-nowrap" }, d.status || "-"),
+                        h("td", { className: "p-3 whitespace-nowrap" }, String(d.creditsTotal || 0)),
+                        h("td", { className: "p-3 whitespace-nowrap" }, String(d.creditsUsed || 0)),
+                        h("td", { className: "p-3 whitespace-nowrap" }, d.amountEuros ? "€" + d.amountEuros : "-"),
+                        h("td", { className: "p-3 whitespace-nowrap text-white/70" }, fmtDate(d.createdAt)),
+                        h(
+                          "td",
+                          { className: "p-3 text-right whitespace-nowrap" },
+                          h(
+                            "div",
+                            { className: "flex justify-end gap-2" },
+                            h(Button, {
+                              variant: "dark",
+                              onClick: function (e) { e.stopPropagation(); pickId(d.id); },
+                            }, "Select"),
+                            h(Button, {
+                              variant: "danger",
+                              disabled: !!busyId,
+                              onClick: function (e) {
+                                e.stopPropagation();
+                                actionDeleteOne(d.id);
+                              },
+                            }, busyId === String(d.id) ? "Deleting..." : "Delete")
+                          )
+                        )
+                      );
+                    }))
+              )
+            )
+          ),
+
+          h("div", { className: "mt-3 text-xs text-white/60" }, "Tip: click any row to select it on the right.")
+        ),
+
+        // Right: controls panel
+        h(
+          Card,
+          { className: "p-4 sm:p-5" },
+          h("div", { className: "mb-3" },
+            h("div", { className: "text-[0.7rem] uppercase tracking-[0.22em] text-white/70" }, "actions"),
+            h("div", { className: "text-lg font-semibold" }, "Manage selected donation")
+          ),
+
+          h(
+            "div",
+            { className: "space-y-3" },
+
+            h("div", null,
+              h("div", { className: "text-xs text-white/70 mb-1" }, "Selected donation ID"),
+              h(Input, {
+                value: selectedId,
+                onChange: function (e) { setSelectedId(e.target.value); },
+                placeholder: "e.g. 12",
+                type: "number",
+              })
+            ),
+
+            (selectedRow
+              ? h(
+                  "div",
+                  { className: "rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm" },
+                  h("div", { className: "text-white/70 text-xs uppercase tracking-[0.18em]" }, "preview"),
+                  h("div", { className: "mt-1 flex flex-col gap-1" },
+                    h("div", null, h("span", { className: "text-white/70" }, "Name: "), h("b", null, selectedRow.name || "-")),
+                    h("div", null, h("span", { className: "text-white/70" }, "Status: "), h("b", null, selectedRow.status || "-")),
+                    h("div", null, h("span", { className: "text-white/70" }, "Credits: "), h("b", null, String(selectedRow.creditsTotal || 0)), " / used ", h("b", null, String(selectedRow.creditsUsed || 0)))
+                  )
+                )
+              : h("div", { className: "text-sm text-white/60" }, "Select a row from the table (or enter an ID).")
+            ),
+
+            // Credits delta
+            h("div", { className: "grid grid-cols-1 sm:grid-cols-2 gap-3" },
+              h("div", null,
+                h("div", { className: "text-xs text-white/70 mb-1" }, "Add / remove credits (delta)"),
+                h(Input, {
+                  value: String(delta),
+                  onChange: function (e) { setDelta(Number(e.target.value)); },
+                  type: "number",
+                  placeholder: "e.g. 1 or -1",
+                })
+              ),
+              h("div", { className: "flex items-end" },
+                h(Button, {
+                  variant: "primary",
+                  className: "w-full",
+                  disabled: !adminToken || !selectedId || !!busyId,
+                  onClick: actionAddCredits,
+                }, "Apply delta")
+              )
+            ),
+
+            // Set totals
+            h("div", { className: "grid grid-cols-1 sm:grid-cols-2 gap-3" },
+              h("div", null,
+                h("div", { className: "text-xs text-white/70 mb-1" }, "Set credits total"),
+                h(Input, {
+                  value: String(creditsTotal),
+                  onChange: function (e) { setCreditsTotal(Number(e.target.value)); },
+                  type: "number",
+                })
+              ),
+              h("div", { className: "flex items-end" },
+                h(Button, {
+                  variant: "dark",
+                  className: "w-full",
+                  disabled: !adminToken || !selectedId || !!busyId,
+                  onClick: actionSetTotal,
+                }, "Set total")
+              )
+            ),
+
+            h("div", { className: "grid grid-cols-1 sm:grid-cols-2 gap-3" },
+              h("div", null,
+                h("div", { className: "text-xs text-white/70 mb-1" }, "Set credits used"),
+                h(Input, {
+                  value: String(creditsUsed),
+                  onChange: function (e) { setCreditsUsed(Number(e.target.value)); },
+                  type: "number",
+                })
+              ),
+              h("div", { className: "flex items-end" },
+                h(Button, {
+                  variant: "dark",
+                  className: "w-full",
+                  disabled: !adminToken || !selectedId || !!busyId,
+                  onClick: actionSetUsed,
+                }, "Set used")
+              )
+            ),
+
+            // Status + requeue
+            h("div", { className: "grid grid-cols-1 sm:grid-cols-2 gap-3" },
+              h("div", null,
+                h("div", { className: "text-xs text-white/70 mb-1" }, "Set status"),
+                h(
+                  Select,
+                  {
+                    value: status,
+                    onChange: function (e) { setStatus(e.target.value); },
+                  },
+                  h("option", { value: "created" }, "created"),
+                  h("option", { value: "waiting" }, "waiting"),
+                  h("option", { value: "active" }, "active"),
+                  h("option", { value: "done" }, "done")
+                )
+              ),
+              h("div", { className: "flex items-end gap-2" },
+                h(Button, {
+                  variant: "primary",
+                  className: "w-full",
+                  disabled: !adminToken || !selectedId || !!busyId,
+                  onClick: actionSetStatus,
+                }, "Update"),
+                h(Button, {
+                  variant: "dark",
+                  className: "w-full",
+                  disabled: !adminToken || !selectedId || !!busyId,
+                  onClick: actionRequeue,
+                }, "Requeue")
+              )
+            )
+          )
+        )
+      ),
+
+      h("div", { className: "text-center text-xs text-white/50 pt-2" },
+        "Admin endpoints are protected by your backend ADMIN_TOKEN. This page stores token only in your browser (localStorage)."
+      )
+    )
+  );
+}

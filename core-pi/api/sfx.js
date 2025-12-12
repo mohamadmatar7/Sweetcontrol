@@ -81,22 +81,48 @@ function spawnPlayer(args, label) {
  * restart it if at least one move direction is still active.
  */
 function playMoveOnceAndMaybeRepeat(file) {
+  // Check if we should still be playing (direction might have been released)
   if (activeDirections.size === 0) {
     return;
   }
 
-  moveLoop = spawnPlayer(['-q', file], 'move loop');
+  // Store reference to the process we're about to spawn
+  const currentProcess = spawnPlayer(['-q', file], 'move loop');
 
-  if (!moveLoop) {
+  if (!currentProcess) {
     return;
   }
 
-  moveLoop.on('exit', () => {
-    moveLoop = null;
+  // Only update moveLoop if this is still the current process
+  // (prevents race condition if stopMoveLoop was called)
+  moveLoop = currentProcess;
 
-    // If still moving when the sound ends, start again
-    if (activeDirections.size > 0) {
+  currentProcess.on('exit', (code, signal) => {
+    // Only continue if this is still the active process and directions are still active
+    if (moveLoop === currentProcess && activeDirections.size > 0) {
+      moveLoop = null;
+      // Immediately restart the loop (no delay needed - mpg123 handles playback timing)
       playMoveOnceAndMaybeRepeat(file);
+    } else {
+      // Process was stopped or directions were released
+      if (moveLoop === currentProcess) {
+        moveLoop = null;
+      }
+    }
+  });
+
+  // Also handle errors
+  currentProcess.on('error', (err) => {
+    if (moveLoop === currentProcess) {
+      moveLoop = null;
+      // If directions are still active, try to restart after a short delay
+      if (activeDirections.size > 0) {
+        setTimeout(() => {
+          if (activeDirections.size > 0 && !moveLoop) {
+            playMoveOnceAndMaybeRepeat(file);
+          }
+        }, 100);
+      }
     }
   });
 }

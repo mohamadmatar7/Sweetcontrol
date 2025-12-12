@@ -59,7 +59,7 @@ const mollie = createMollieClient({ apiKey: process.env.MOLLIE_API_KEY });
  * - If a release does NOT arrive within MAX_HOLD_MS, auto-release server-side.
  * - This prevents stuck claw movement.
  */
-const MAX_HOLD_MS = 1200;
+const MAX_HOLD_MS = 5000; 
 const holdTimers = new Map();
 
 function armAutoRelease(direction) {

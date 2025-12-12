@@ -13,26 +13,27 @@ export default function HowToPlayPage() {
     {
       title: "Spelen",
       lines: [
-        "Door het doneren aan de Warmste week krijg je credits.",
-        "Met die credits kan je de machine bespelen.",
-        "€1 = 1 Speelbeurt (max 5 speelbeurten).",
+        "Doneer aan De Warmste Week <br /> en krijg credits.",
+        "Geef balans aan ons en Hippo's leven",
+        "Eén credit kost € 1 (max. 5 credits).",
       ],
     },
     {
       title: "Doel",
       lines: [
-        "Hou de grijpbak zolang mogelijk in leven.",
-        "Hou de suikerspiegel zo gebalanceerd mogelijk.",
-        "Eten -> verhoogt de grafiek - Sporten -> verlaagt de grafiek.",
+        "Help! <br /> Balanceer Hippo's suikerspiegel",
+        "Laag -> Geef eten",
+        "Hoog -> Sporten",
+        "Te Hoog -> Insuline spuiten",
       ],
     },
-    {
-      title: "Controls",
-      lines: [
-        "Gebruik de pijltjes om de kraan te bewegen.",
-        "Gebruik de drop knop om de grijparm te verlagen.",
-      ],
-    },
+    // {
+    //   title: "Controls",
+    //   lines: [
+    //     "Gebruik de pijltjes om de kraan te bewegen.",
+    //     "Gebruik de drop knop om de grijparm te verlagen.",
+    //   ],
+    // },
   ];
 
   const current = sections[step];
@@ -90,9 +91,7 @@ export default function HowToPlayPage() {
                     </span>
 
                     {/* Text takes remaining width and wraps nicely */}
-                    <span className="flex-1 leading-snug">
-                      {line}
-                    </span>
+                    <span className="flex-1 leading-snug" dangerouslySetInnerHTML={{ __html: line }} />
                   </li>
                 ))}
               </ul>
