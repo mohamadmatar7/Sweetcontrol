@@ -16,10 +16,10 @@ LABELS_PATH = os.path.join(BASE_DIR, "labels.txt")
 # SMALL  (224,168,192,144)   # 30% area
 # MEDIUM (160,120,320,240)   # 50% area
 # LARGE  (96,72,448,336)     # 70% area
-ROI = (200, 75, 350, 300)  # x, y, w, h
+ROI = (125, 50, 400, 350)  # x, y, w, h
 
 # ---- Thresholds and timings ----
-PROB_THR       = 0.85   # min. confidence for a class
+PROB_THR       = 0.80   # min. confidence for a class
 STABLE_TIME    = 2.0    # seconds the same class must be stable
 SHOW_TEXT_TIME = 5.0    # seconds to show big text after drop
 COOLDOWN       = 4.0    # seconds between two drops
