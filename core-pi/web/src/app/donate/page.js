@@ -160,13 +160,13 @@ export default function Donate() {
               </div>
 
               {/* CUSTOM AMOUNT TOGGLER */}
-              <button
+              {/* <button
                 type="button"
                 className="w-full py-3 rounded-lg font-bold bg-[#7bb4ff] hover:bg-[#6da2e6] transition mb-4 text-white"
                 onClick={toggleCustomInput}
               >
                 Ander bedrag...
-              </button>
+              </button> */}
 
               {/* CUSTOM AMOUNT INPUT */}
               {showCustomInput && (
