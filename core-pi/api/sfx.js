@@ -26,6 +26,28 @@ const activeDirections = new Set();
 
 let moveLoop = null;
 
+// Watchdog: if move audio gets stuck, stop it automatically
+const MOVE_WATCHDOG_MS = 5000;
+let moveWatchdog = null;
+let lastMoveKickAt = 0;
+
+function kickMoveWatchdog() {
+  lastMoveKickAt = Date.now();
+
+  if (moveWatchdog) return;
+
+  moveWatchdog = setInterval(() => {
+    if (moveLoop && Date.now() - lastMoveKickAt > MOVE_WATCHDOG_MS) {
+      stopMoveLoop();
+    }
+
+    if (!moveLoop) {
+      clearInterval(moveWatchdog);
+      moveWatchdog = null;
+    }
+  }, 500);
+}
+
 function ensureFile(key) {
   const file = FILES[key];
   if (!file) return null;
@@ -57,7 +79,10 @@ function spawnPlayer(args, label) {
 }
 
 function startMoveLoop() {
-  if (moveLoop) return;
+  if (moveLoop) {
+    kickMoveWatchdog();
+    return;
+  }
 
   const file = ensureFile('move');
   if (!file) return;
@@ -65,6 +90,9 @@ function startMoveLoop() {
   // Use mpg123 built-in infinite loop
   // --loop -1 is the most reliable for "forever" across builds
   moveLoop = spawnPlayer(['-q', '--loop', '-1', file], 'move loop');
+
+  // Start watchdog once move is running
+  kickMoveWatchdog();
 
   if (moveLoop) {
     moveLoop.on('exit', () => {
@@ -88,11 +116,20 @@ function stopMoveLoop() {
       proc.kill('SIGKILL');
     } catch {}
   }, 200);
+
+  if (moveWatchdog) {
+    clearInterval(moveWatchdog);
+    moveWatchdog = null;
+  }
 }
 
 function onMovePress(direction) {
   if (!direction) return;
   activeDirections.add(direction);
+
+  // Kick watchdog on every move press
+  kickMoveWatchdog();
+
   startMoveLoop();
 }
 
