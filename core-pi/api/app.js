@@ -62,6 +62,11 @@ const mollie = createMollieClient({ apiKey: process.env.MOLLIE_API_KEY });
 const MAX_HOLD_MS = 5000; 
 const holdTimers = new Map();
 
+/**
+* Variable to enable free mode (no payments)
+*/
+const FREE_MODE = String(process.env.FREE_MODE || "false").toLowerCase() === "true";
+
 function armAutoRelease(direction) {
     if (holdTimers.has(direction)) {
         clearTimeout(holdTimers.get(direction));
@@ -80,47 +85,111 @@ function armAutoRelease(direction) {
  * Create a Mollie payment (Intent-first)
  * Body: { name, amountEuros, email? }
  */
+// app.post('/api/donations/create', async (req, res) => {
+//     try {
+//         const { name, amountEuros, email } = req.body;
+
+//         if (!name || !amountEuros) {
+//             return res.status(400).json({ error: 'name and amountEuros are required' });
+//         }
+
+//         const amountRequestedEur = Number(amountEuros);
+//         if (Number.isNaN(amountRequestedEur) || amountRequestedEur <= 0) {
+//             return res.status(400).json({ error: 'amountEuros must be a positive number' });
+//         }
+
+//         // 1) Create intent first (saved in SQLite)
+//         const { intentId } = createIntent({
+//             name: name.trim(),
+//             email: email?.trim() || null,
+//             amountRequestedEur,
+//         });
+
+//         // 2) Create Mollie payment tied to intentId
+//         const payment = await mollie.payments.create({
+//             amount: { currency: 'EUR', value: amountRequestedEur.toFixed(2) },
+//             description: `SweetControl donation by ${name}`,
+//             redirectUrl: `${process.env.PUBLIC_WEB_URL}/play?intent=${intentId}`,
+//             webhookUrl: `${process.env.PUBLIC_API_URL}/api/mollie/webhook`,
+//             metadata: { intentId },
+//         });
+
+//         // 3) Attach Mollie payment id to intent
+//         attachPaymentToIntent(intentId, payment.id);
+
+//         return res.json({
+//             checkoutUrl: payment.getCheckoutUrl(),
+//             intentId,
+//         });
+//     } catch (err) {
+//         console.error('Create payment error:', err);
+//         return res.status(500).json({ error: 'payment_create_failed' });
+//     }
+// });
 app.post('/api/donations/create', async (req, res) => {
-    try {
-        const { name, amountEuros, email } = req.body;
+  try {
+    const { name, amountEuros, email } = req.body;
 
-        if (!name || !amountEuros) {
-            return res.status(400).json({ error: 'name and amountEuros are required' });
-        }
-
-        const amountRequestedEur = Number(amountEuros);
-        if (Number.isNaN(amountRequestedEur) || amountRequestedEur <= 0) {
-            return res.status(400).json({ error: 'amountEuros must be a positive number' });
-        }
-
-        // 1) Create intent first (saved in SQLite)
-        const { intentId } = createIntent({
-            name: name.trim(),
-            email: email?.trim() || null,
-            amountRequestedEur,
-        });
-
-        // 2) Create Mollie payment tied to intentId
-        const payment = await mollie.payments.create({
-            amount: { currency: 'EUR', value: amountRequestedEur.toFixed(2) },
-            description: `SweetControl donation by ${name}`,
-            redirectUrl: `${process.env.PUBLIC_WEB_URL}/play?intent=${intentId}`,
-            webhookUrl: `${process.env.PUBLIC_API_URL}/api/mollie/webhook`,
-            metadata: { intentId },
-        });
-
-        // 3) Attach Mollie payment id to intent
-        attachPaymentToIntent(intentId, payment.id);
-
-        return res.json({
-            checkoutUrl: payment.getCheckoutUrl(),
-            intentId,
-        });
-    } catch (err) {
-        console.error('Create payment error:', err);
-        return res.status(500).json({ error: 'payment_create_failed' });
+    if (!name || !amountEuros) {
+      return res.status(400).json({ error: 'name and amountEuros are required' });
     }
+
+    const amountRequestedEur = Number(amountEuros);
+    if (Number.isNaN(amountRequestedEur) || amountRequestedEur <= 0) {
+      return res.status(400).json({ error: 'amountEuros must be a positive number' });
+    }
+
+    // 1) Create intent first (saved in SQLite)
+    const { intentId } = createIntent({
+      name: name.trim(),
+      email: email?.trim() || null,
+      amountRequestedEur,
+    });
+
+    // ✅ FREE MODE: skip Mollie and treat as paid immediately
+    if (FREE_MODE) {
+      const fakePaymentId = `free_${intentId}`; // unique per intent
+      attachPaymentToIntent(intentId, fakePaymentId);
+
+      // Mark as paid + credits + enqueue, exactly like Mollie paid
+      game.handlePaidDonation({
+        intentId,
+        molliePaymentId: fakePaymentId,
+        amountEur: amountRequestedEur,
+      });
+
+      return res.json({
+        checkoutUrl: `${process.env.PUBLIC_WEB_URL}/play?intent=${intentId}`,
+        intentId,
+        freeMode: true,
+      });
+    }
+
+    // 2) Create Mollie payment tied to intentId (normal mode)
+    const payment = await mollie.payments.create({
+      amount: { currency: 'EUR', value: amountRequestedEur.toFixed(2) },
+      description: `SweetControl donation by ${name}`,
+      redirectUrl: `${process.env.PUBLIC_WEB_URL}/play?intent=${intentId}`,
+      webhookUrl: `${process.env.PUBLIC_API_URL}/api/mollie/webhook`,
+      metadata: { intentId },
+    });
+
+    // 3) Attach Mollie payment id to intent
+    attachPaymentToIntent(intentId, payment.id);
+
+    return res.json({
+      checkoutUrl: payment.getCheckoutUrl(),
+      intentId,
+    });
+  } catch (err) {
+    console.error('Create payment error:', err);
+    return res.status(500).json({ error: 'payment_create_failed' });
+  }
 });
+
+
+
+
 
 /**
  * Mollie webhook (source of truth)

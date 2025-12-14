@@ -26,6 +26,7 @@ services:
       - SMTP_PORT=${SMTP_PORT}
       - SMTP_HOST=${SMTP_HOST}
       - NODEMAILER_DEBUG=${NODEMAILER_DEBUG}
+      - FREE_MODE=${FREE_MODE}
     volumes:
       - ./api:/usr/src/app
       - sweetpi_core_node_modules:/usr/src/app/node_modules
