@@ -90,6 +90,10 @@ export default function Disclaimer() {
               <ul className="mt-2 text-sm sm:text-base leading-relaxed list-disc pl-5 space-y-2">
                 <li>Sweet Control is een studentenproject en wordt “as-is” aangeboden.</li>
                 <li>
+                  Spelers winnen geen geld of prijzen, dit is volledig bedoeld als steunactie
+                  voor het goede doel.
+                </li>
+                <li>
                   Bij technische problemen (bv. mislukte redirect) raden we aan opnieuw
                   te proberen of later nog eens te doneren.
                 </li>
@@ -104,12 +108,13 @@ export default function Disclaimer() {
           {/* Link to doneren */}
           <div className="text-center mt-4 mx-4 sm:mx-0">
             <Link
-                href="/donate"
-                className="inline-block w-full sm:w-auto sm:min-w-[260px] sm:px-10 p-3 md:p-4 rounded-lg bg-gradient-to-r from-[#ffbb00] to-[#ff3b1f] hover:opacity-90 transition active:scale-95 mb-2 md:mb-6 text-white font-black text-lg md:text-xl"
+              href="/donate"
+              className="inline-block w-full sm:w-auto sm:min-w-[260px] sm:px-10 p-3 md:p-4 rounded-lg bg-gradient-to-r from-[#ffbb00] to-[#ff3b1f] hover:opacity-90 transition active:scale-95 mb-2 md:mb-6 text-white font-black text-lg md:text-xl"
             >
-                Terug naar doneren
+              Terug naar doneren
             </Link>
           </div>
+
           {/* Footer */}
           <Footer />
         </div>
