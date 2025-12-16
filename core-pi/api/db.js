@@ -280,6 +280,43 @@ function deleteAllDonations() {
   db.prepare(`DELETE FROM donations`).run();
 }
 
+/**
+ * Stats: total paid donations from Mollie only
+ * ✅ Counts ONLY from 16/12/2025 12:45 PM (local time)
+ */
+function getMolliePaidTotals() {
+  const now = new Date();
+
+  // 16/12/2025 at 12:45 PM (local time)
+  const cutoff = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    11, // hour
+    45, // minute
+    0,  // second
+    0   // ms
+  ).toISOString();
+
+  const row = db.prepare(`
+    SELECT
+      COALESCE(SUM(amount_eur), 0) AS totalEur,
+      COALESCE(COUNT(*), 0) AS count
+    FROM donations
+    WHERE amount_eur IS NOT NULL
+      AND mollie_payment_id IS NOT NULL
+      AND mollie_payment_id LIKE 'tr_%'
+      AND created_at >= ?
+  `).get(cutoff);
+
+  return {
+    totalEur: Number(row.totalEur || 0),
+    count: Number(row.count || 0),
+  };
+}
+
+
+
 module.exports = {
   db,
   createIntent,
@@ -302,4 +339,7 @@ module.exports = {
   setCreditsUsed,
   deleteDonationById,
   deleteAllDonations,
+
+  // Stats
+  getMolliePaidTotals,
 };

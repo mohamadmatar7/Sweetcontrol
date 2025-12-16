@@ -82,6 +82,7 @@ function normalizeDonation(row) {
   var amount =
     row.amountEuros ??
     row.amount_euros ??
+    row.amount_eur ??
     row.amount ??
     row.euros ??
     row.eur ??

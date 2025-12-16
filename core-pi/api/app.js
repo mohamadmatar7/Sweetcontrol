@@ -14,6 +14,7 @@ const {
     getDonationByPaymentId,
     getDonationByToken,
     listQueue,
+    getMolliePaidTotals,
 } = require('./db');
 
 const app = express();
@@ -220,6 +221,14 @@ app.post('/api/mollie/webhook', async (req, res) => {
                 molliePaymentId: paymentId,
                 amountEur,
             });
+
+            // realtime mollie-paid stats Read ONLY
+            try {
+                const stats = getMolliePaidTotals();
+                                safeTrigger('public-stats', 'mollie-total-update', stats);
+            } catch (e) {
+                console.error('Stats broadcast failed:', e);
+            }
         }
 
         return res.status(200).send('ok');
@@ -467,6 +476,29 @@ app.get('/api/me', (req, res) => {
         creditsRemaining,
     });
 });
+
+app.get("/api/config", (req, res) => {
+  const FREE_MODE =
+    String(process.env.FREE_MODE || "false").toLowerCase() === "true";
+
+  res.set("Cache-Control", "no-store");
+  return res.json({ freeMode: FREE_MODE });
+});
+
+/**
+ * Public stats: Mollie paid donations only
+ */
+app.get('/api/stats/mollie-total', (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  res.set('Surrogate-Control', 'no-store');
+
+  const stats = getMolliePaidTotals();
+  return res.json({ ok: true, ...stats });
+});
+
+
 
 app.use('/api/admin', createAdminRouter(game));
 
