@@ -68,6 +68,17 @@ const holdTimers = new Map();
 */
 const FREE_MODE = String(process.env.FREE_MODE || "false").toLowerCase() === "true";
 
+// LiveKit streaming (optional)
+const LIVEKIT_URL = process.env.LIVEKIT_URL;
+const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY;
+const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET;
+const LIVEKIT_ROOM = process.env.LIVEKIT_ROOM || "sweet-control";
+const LIVEKIT_ENABLED = Boolean(
+    LIVEKIT_URL &&
+    LIVEKIT_API_KEY &&
+    LIVEKIT_API_SECRET
+);
+
 function armAutoRelease(direction) {
     if (holdTimers.has(direction)) {
         clearTimeout(holdTimers.get(direction));
@@ -319,6 +330,37 @@ app.get('/api/queue', (req, res) => {
 
     const activeState = game.getActiveState();
     return res.json({ queue, ...activeState });
+});
+
+/**
+ * LiveKit viewer token (read-only subscriber)
+ */
+app.get('/api/livekit/token', async (req, res) => {
+    res.set('Cache-Control', 'no-store');
+
+    if (!LIVEKIT_ENABLED) {
+        return res.status(503).json({ ok: false, error: 'livekit_not_configured' });
+    }
+
+    try {
+        const { AccessToken } = await import('livekit-server-sdk');
+        const room = String(req.query.room || LIVEKIT_ROOM);
+        const identity = `viewer-${Math.random().toString(36).slice(2)}`;
+
+        const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, { identity });
+        at.addGrant({
+            room,
+            roomJoin: true,
+            canPublish: false,
+            canSubscribe: true,
+        });
+
+        const token = await at.toJwt();
+        return res.json({ ok: true, url: LIVEKIT_URL, token, room });
+    } catch (err) {
+        console.error('LiveKit token error:', err);
+        return res.status(500).json({ ok: false, error: 'livekit_token_failed' });
+    }
 });
 
 /**

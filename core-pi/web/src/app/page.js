@@ -67,6 +67,14 @@ export default function Homepage() {
               </div>
             </Link>
 
+            {/* Livestream & remote play */}
+            <Link href="/livestream" className="flex items-stretch w-full">
+              <div className="w-full py-3 md:py-4 rounded-lg bg-[#0b0b1c]/80 border border-white/20 hover:opacity-90 transition disabled:opacity-60 active:scale-95 text-white font-black text-lg md:text-xl flex items-center justify-center gap-2">
+                <span>🎥</span>
+                <span>Speel live van thuis</span>
+              </div>
+            </Link>
+
             {/* 2) Doneer & speel meteen */}
             <Link href="/donate" className="flex items-stretch w-full">
               <div className="w-full py-3 md:py-4 rounded-lg bg-gradient-to-r from-[#ffbb00] to-[#ff3b1f] hover:opacity-90 transition disabled:opacity-60 active:scale-95 mb-4 sm:mb-7 text-white font-black text-lg md:text-xl flex items-center justify-center gap-2">

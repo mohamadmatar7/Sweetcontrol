@@ -191,7 +191,34 @@ NEXT_PUBLIC_SOKETI_KEY=
 NEXT_PUBLIC_SOKETI_WS_HOST=
 NEXT_PUBLIC_SOKETI_WS_PORT=443
 NEXT_PUBLIC_SOKETI_FORCE_TLS=true
+
+# Live stream room (viewer)
+NEXT_PUBLIC_LIVEKIT_ROOM=sweet-control
 ```
+
+---
+
+### 4. Livestream (LiveKit)
+
+Add these to the **core** `.env` so `/api/livekit/token` can mint viewer tokens:
+
+```env
+LIVEKIT_URL=wss://<your-project>.livekit.cloud
+LIVEKIT_API_KEY=lk_api_key
+LIVEKIT_API_SECRET=lk_api_secret
+# Optional override, defaults to "sweet-control"
+LIVEKIT_ROOM=sweet-control
+```
+
+How to publish the USB webcam:
+
+- Create a **LiveKit Ingress** (WHIP or RTMP).
+- On the Pi, push the camera to that ingress, for example:
+  ```bash
+  ffmpeg -f v4l2 -i /dev/video0 -vcodec libx264 -preset veryfast -f flv rtmp://<ingress-url>
+  ```
+- The frontend pulls a viewer token from `/api/livekit/token` and shows the
+  stream on `/livestream` and on the arcade screen.
 
 ---
 
