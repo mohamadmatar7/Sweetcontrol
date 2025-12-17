@@ -162,14 +162,14 @@ export default function LiveStreamPlayer({ roomName = DEFAULT_ROOM, compact = fa
         </div>
       </div>
 
-      <div className="relative w-full overflow-hidden rounded-xl bg-black border border-white/10">
+      <div className="relative w-full aspect-[9/16] overflow-hidden rounded-xl bg-black border border-white/10">
         <video
           ref={videoRef}
-          className="w-full h-full object-contain"
+          className="absolute inset-0 w-full h-full object-contain -rotate-270"
           muted
           playsInline
           autoPlay
-          style={{ minHeight: compact ? 220 : 280, backgroundColor: "#000" }}
+          style={{ backgroundColor: "#000" }}
         />
 
         <div

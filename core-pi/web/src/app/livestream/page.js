@@ -7,13 +7,13 @@ export default function LiveStreamPage() {
     <main className="min-h-screen bg-gradient-to-br from-[#5a3ffb] to-[#2c0f74] text-slate-100 flex flex-col">
       {/* Header with back button and title */}
       <div className="relative text-center py-4 px-4">
-        <Link
+                <Link
           href="/"
           className="absolute left-4 top-1/2 -translate-y-1/2 px-4 py-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-lg font-semibold transition-all active:scale-95 flex items-center gap-2"
-        >
+                >
           <span>←</span>
           <span className="hidden sm:inline">Terug</span>
-        </Link>
+                </Link>
         <h1 className="text-2xl md:text-3xl font-bold">
           Speel online mee via je desktop
         </h1>
@@ -24,7 +24,7 @@ export default function LiveStreamPage() {
         <div className="w-full max-w-5xl">
           <LiveStreamPlayer />
         </div>
-      </div>
+              </div>
 
       {/* QR Code section at the bottom */}
       <div className="bg-white/10 backdrop-blur-sm border-t border-white/20 py-4 px-4">
