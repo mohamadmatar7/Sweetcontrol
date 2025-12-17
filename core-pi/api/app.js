@@ -185,6 +185,7 @@ app.post('/api/donations/create', async (req, res) => {
       redirectUrl: `${process.env.PUBLIC_WEB_URL}/play?intent=${intentId}`,
       webhookUrl: `${process.env.PUBLIC_API_URL}/api/mollie/webhook`,
       metadata: { intentId },
+      locale: 'nl_BE', // Dutch (Flemish) for Belgium
     });
 
     // 3) Attach Mollie payment id to intent
