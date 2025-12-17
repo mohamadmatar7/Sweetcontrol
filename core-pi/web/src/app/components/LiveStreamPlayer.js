@@ -162,18 +162,22 @@ export default function LiveStreamPlayer({ roomName = DEFAULT_ROOM, compact = fa
         </div>
       </div>
 
-      <div className="relative w-full aspect-[9/16] overflow-hidden rounded-xl bg-black border border-white/10">
+      <div className="relative w-full aspect-[9/16] overflow-hidden rounded-xl bg-black border border-white/10 flex items-center justify-center">
         <video
           ref={videoRef}
-          className="absolute inset-0 w-full h-full object-contain -rotate-270"
+          className="h-full object-contain"
           muted
           playsInline
           autoPlay
-          style={{ backgroundColor: "#000" }}
+          style={{ 
+            backgroundColor: "#000",
+            transform: "rotate(-270deg) scale(0.56)",
+            maxWidth: "none"
+          }}
         />
 
         <div
-          className="pointer-events-none absolute left-[45%] top-[68%] -translate-x-1/2 -translate-y-1/2 z-10 opacity-70 animate-pulse"
+          className="pointer-events-none absolute left-[30%] top-[40%] -translate-x-1/2 -translate-y-1/2 z-10 opacity-70 animate-pulse"
           aria-hidden="true"
         >
           <div
