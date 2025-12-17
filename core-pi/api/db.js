@@ -285,18 +285,9 @@ function deleteAllDonations() {
  * ✅ Counts ONLY from 16/12/2025 12:45 PM (local time)
  */
 function getMolliePaidTotals() {
-  const now = new Date();
-
   // 16/12/2025 at 12:45 PM (local time)
-  const cutoff = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate(),
-    11, // hour
-    45, // minute
-    0,  // second
-    0   // ms
-  ).toISOString();
+  // Note: months are 0-indexed in JavaScript (11 = December)
+  const cutoff = new Date(2025, 11, 16, 12, 45, 0, 0).toISOString();
 
   const row = db.prepare(`
     SELECT
