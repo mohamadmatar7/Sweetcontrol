@@ -5,7 +5,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 const DEFAULT_ROOM = process.env.NEXT_PUBLIC_LIVEKIT_ROOM || "sweet-control";
 
-export default function LiveStreamPlayer({ roomName = DEFAULT_ROOM, compact = false }) {
+export default function LiveStreamPlayer({
+  roomName = DEFAULT_ROOM,
+  compact = false,
+  className = "",
+}) {
   const videoRef = useRef(null);
   const roomRef = useRef(null);
   const videoTrackRef = useRef(null);
@@ -146,8 +150,40 @@ export default function LiveStreamPlayer({ roomName = DEFAULT_ROOM, compact = fa
     <div
       className={`rounded-2xl bg-[#0b0b1c]/80 border border-white/10 ${
         compact ? "p-3 shadow-md" : "p-4 shadow-xl"
-      }`}
+      } ${className}`}
     >
+      <style jsx>{`
+        @keyframes crosshair-rotate {
+          from {
+            transform: rotate(0deg);
+          }
+          to {
+            transform: rotate(360deg);
+          }
+        }
+        @keyframes crosshair-pulse {
+          0%,
+          100% {
+            opacity: 0.75;
+            transform: scale(0.96);
+            filter: drop-shadow(0 0 0 rgba(74, 57, 163, 0));
+          }
+          50% {
+            opacity: 0.95;
+            transform: scale(1.06);
+            filter: drop-shadow(0 0 10px rgba(74, 57, 163, 0.35));
+          }
+        }
+        .crosshair-rotate {
+          animation: crosshair-rotate 8s linear infinite;
+          will-change: transform;
+        }
+        .crosshair-pulse {
+          animation: crosshair-pulse 1.6s ease-in-out infinite;
+          will-change: transform, opacity, filter;
+        }
+      `}</style>
+
       <div className="flex items-center justify-between gap-3 mb-3">
         <div>
           <p className="text-[11px] uppercase tracking-[0.14em] text-white/60">
@@ -177,12 +213,33 @@ export default function LiveStreamPlayer({ roomName = DEFAULT_ROOM, compact = fa
         />
 
         <div
-          className="pointer-events-none absolute left-[30%] top-[40%] -translate-x-1/2 -translate-y-1/2 z-10 opacity-70 animate-pulse"
+          className="pointer-events-none absolute left-[30%] top-[40%] -translate-x-1/2 -translate-y-1/2 z-10"
           aria-hidden="true"
         >
           <div
-            className={`${compact ? "h-16 w-16" : "h-20 w-20"} rounded-full border-2 border-white/70`}
-          />
+            className={`crosshair-rotate relative ${compact ? "h-16 w-16" : "h-20 w-20"}`}
+          >
+            <div className="crosshair-pulse absolute inset-0">
+              {/* Ring */}
+              <div className="absolute inset-0 rounded-full border-[3px] border-[#4a39a3]" />
+
+              {/* 3 ticks on the edge (0°, 120°, 240°) */}
+              {[0, 120, 240].map((deg) => (
+                <span
+                  key={deg}
+                  className="absolute left-1/2 top-1/2 block bg-[#4a39a3]"
+                  style={{
+                    width: "3px",
+                    height: compact ? "10px" : "12px",
+                    borderRadius: "2px",
+                    transform: `translate(-50%, -50%) rotate(${deg}deg) translateY(${
+                      compact ? "-30px" : "-38px"
+                    })`,
+                  }}
+                />
+              ))}
+            </div>
+          </div>
         </div>
 
         {!hasVideoTrack && status !== "live" && (

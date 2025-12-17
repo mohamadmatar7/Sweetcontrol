@@ -43,10 +43,41 @@ export default function LiveStreamPage() {
   const [sugarState, setSugarState] = useState(null);
   const [history, setHistory] = useState([]);
   const [mounted, setMounted] = useState(false);
+  const [showMobileWarning, setShowMobileWarning] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Mobile warning (show once per browser)
+  useEffect(() => {
+    if (!mounted) return;
+
+    const KEY = "livestream_mobile_warning_ack_v1";
+    const alreadyAcked =
+      typeof window !== "undefined" &&
+      window.localStorage &&
+      window.localStorage.getItem(KEY) === "1";
+
+    if (alreadyAcked) return;
+
+    const check = () => {
+      if (typeof window === "undefined") return;
+      const isMobileWidth = window.innerWidth < 500;
+      setShowMobileWarning(isMobileWidth);
+    };
+
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, [mounted]);
+
+  const dismissMobileWarning = () => {
+    try {
+      window.localStorage?.setItem("livestream_mobile_warning_ack_v1", "1");
+    } catch {}
+    setShowMobileWarning(false);
+  };
 
   const currentVal = sugarState?.index ?? 100;
   const scannedLabelRaw = sugarState?.lastLabel ?? "niks";
@@ -311,21 +342,67 @@ export default function LiveStreamPage() {
         }
       `}</style>
 
-      {/* Back button - absolute positioned */}
-      <Link
-        href="/"
-        className="absolute top-4 left-4 z-50 px-4 py-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-lg font-semibold transition-all active:scale-95 flex items-center gap-2"
-      >
-        <span>←</span>
-        <span className="hidden sm:inline">Terug</span>
-      </Link>
+      {/* Mobile warning modal */}
+      {showMobileWarning && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-[2px]"
+            onClick={dismissMobileWarning}
+            aria-hidden="true"
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="relative w-full max-w-md rounded-2xl bg-black/20 backdrop-blur-sm border-2 border-[#FF6B00]/50 shadow-2xl p-5"
+          >
+            <p className="text-[11px] uppercase tracking-[0.18em] text-white/60">
+              Let op
+            </p>
+            <h2 className="mt-1 text-xl font-bold">
+              Deze pagina is gemaakt voor desktop
+            </h2>
+            <p className="mt-3 text-white/80 text-sm leading-relaxed">
+               Gebruik bij voorkeur een desktop
+              of laptop.
+            </p>
+
+            <div className="mt-5 flex flex-col sm:flex-row gap-3 sm:justify-end">
+              <Link
+                href="/"
+                className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/15 border border-white/10 text-white font-semibold text-sm text-center"
+              >
+                Terug
+              </Link>
+              <button
+                onClick={dismissMobileWarning}
+                className="px-4 py-2 rounded-lg bg-gradient-to-r from-[#7bb4ff] to-[#5a3ffb] text-white font-semibold text-sm"
+              >
+                Open toch de livestream
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-4 lg:py-6 min-h-screen flex flex-col">
-        {/* Title (centered) */}
-        <header className="relative mb-6 lg:mb-8">
-          <h1 className="text-center text-2xl sm:text-3xl lg:text-4xl font-bold">
-            Speel online mee via je desktop
-          </h1>
+        {/* Header row (back button + centered title) */}
+        <header className="mb-6 lg:mb-8">
+          <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
+            <Link
+              href="/"
+              className="z-50 px-3 sm:px-4 py-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-lg font-semibold transition-all active:scale-95 flex items-center gap-2 whitespace-nowrap"
+            >
+              <span>←</span>
+              <span className="hidden sm:inline">Terug</span>
+            </Link>
+
+            <h1 className="text-center text-2xl sm:text-3xl lg:text-4xl font-bold">
+              Speel online mee via je desktop
+            </h1>
+
+            {/* Spacer to keep title centered */}
+            <div aria-hidden="true" />
+          </div>
         </header>
 
         {/* Responsive layout: mobile stacked, desktop 65/35 */}
@@ -333,7 +410,7 @@ export default function LiveStreamPage() {
           {/* LEFT (65%): Hippo + Graph + info */}
           <section className="min-h-0 flex flex-col gap-6 lg:gap-0 lg:h-full lg:justify-evenly">
             {/* Graph section with Hippo left */}
-            <div className="bg-black/20 border-2 border-[#FF6B00]/50 rounded-2xl p-4 sm:p-6 flex flex-col lg:justify-center">
+            <div className="bg-black/20 backdrop-blur-sm border-2 border-[#FF6B00]/50 rounded-2xl shadow-lg p-4 sm:p-6 flex flex-col lg:justify-center">
               <div className="flex flex-col lg:flex-row gap-6 min-h-0 lg:items-center">
                 {/* Hippo */}
                 <div className="lg:w-[34%] shrink-0 flex flex-col items-center justify-center">
@@ -418,7 +495,7 @@ export default function LiveStreamPage() {
             </div>
 
             {/* QR Code and Logos Section */}
-            <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-4 mx-auto w-full max-w-4xl">
+            <div className="bg-black/20 backdrop-blur-sm border-2 border-[#FF6B00]/50 rounded-2xl shadow-lg p-4 mx-auto w-full max-w-4xl">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 {/* QR Code and text */}
                 <div className="flex items-center gap-4">
@@ -463,7 +540,10 @@ export default function LiveStreamPage() {
           <aside className="min-h-0 flex flex-col lg:h-full lg:justify-evenly">
             {/* Cap the stream width on large screens so the 9:16 player doesn't overflow vertically */}
             <div className="w-full sm:max-w-md lg:max-w-[340px] xl:max-w-[380px] mx-auto lg:mx-0 lg:ml-auto">
-              <LiveStreamPlayer compact />
+              <LiveStreamPlayer
+                compact
+                className="bg-black/20 backdrop-blur-sm border-2 border-[#FF6B00]/50 shadow-lg"
+              />
             </div>
           </aside>
         </div>
