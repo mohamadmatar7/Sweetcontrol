@@ -1,51 +1,68 @@
+import Image from "next/image";
 import Link from "next/link";
-import Hippo from "../components/Hippo";
-import Footer from "../components/Footer";
 import LiveStreamPlayer from "../components/LiveStreamPlayer";
 
 export default function LiveStreamPage() {
   return (
-    <main className="min-h-screen bg-gradient-to-br from-[#5a3ffb] to-[#2c0f74] text-slate-100 flex justify-center p-3">
-      <div className="w-full max-w-4xl flex flex-col items-center justify-center">
-        <Hippo title="Live spelen">
-          <div className="space-y-4 md:space-y-5">
-            <LiveStreamPlayer />
+    <main className="min-h-screen bg-gradient-to-br from-[#5a3ffb] to-[#2c0f74] text-slate-100 flex flex-col">
+      {/* Header with back button and title */}
+      <div className="relative text-center py-4 px-4">
+        <Link
+          href="/"
+          className="absolute left-4 top-1/2 -translate-y-1/2 px-4 py-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-lg font-semibold transition-all active:scale-95 flex items-center gap-2"
+        >
+          <span>←</span>
+          <span className="hidden sm:inline">Terug</span>
+        </Link>
+        <h1 className="text-2xl md:text-3xl font-bold">
+          Speel online mee via je desktop
+        </h1>
+      </div>
 
-            <div className="bg-white/90 border border-white/60 rounded-2xl p-4 sm:p-5 text-[#141326] shadow-lg">
-              <h2 className="text-lg font-semibold mb-2 flex items-center gap-2">
-                <span>🎥</span>
-                <span>Speel mee van thuis</span>
-              </h2>
-              <p className="text-sm text-slate-700 mb-3">
-                Dit is de live top-down cam op de grijparm. Open de stream op je
-                laptop of desktop voor de beste latency en gebruik je donatie
-                om meteen in de rij te komen.
-              </p>
+      {/* Livestream - centered with space around it */}
+      <div className="flex-1 flex items-center justify-center px-4 sm:px-8 md:px-12 py-6">
+        <div className="w-full max-w-5xl">
+          <LiveStreamPlayer />
+        </div>
+      </div>
 
-              <div className="flex flex-col sm:flex-row gap-3">
-                <Link
-                  href="/donate"
-                  className="flex-1 text-center px-4 py-3 rounded-xl bg-gradient-to-r from-[#ffbb00] to-[#ff3b1f] text-white font-bold shadow-md active:scale-95 transition"
-                >
-                  Doneer &amp; speel meteen
-                </Link>
-                <Link
-                  href="/how-to-play"
-                  className="flex-1 text-center px-4 py-3 rounded-xl bg-[#0b0b1c] text-white font-bold border border-white/10 shadow-md active:scale-95 transition"
-                >
-                  Hoe werkt het?
-                </Link>
-              </div>
-
-              <p className="text-xs text-slate-500 mt-3">
-                Problemen met beeld? Klik op &ldquo;Herstart stream&rdquo; of
-                ververs de pagina. Zorg dat je browser geluid mag afspelen als
-                je audio wil horen.
-              </p>
+      {/* QR Code section at the bottom */}
+      <div className="bg-white/10 backdrop-blur-sm border-t border-white/20 py-4 px-4">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+          {/* QR Code and text */}
+          <div className="flex flex-col sm:flex-row items-center gap-4 flex-1">
+            <div className="bg-white rounded-lg p-2 shadow-lg">
+              <Image
+                src="/qr-code-controls.png"
+                alt="QR Code"
+                width={120}
+                height={120}
+                className="w-24 h-24 sm:w-32 sm:h-32"
+              />
             </div>
+            <p className="text-lg sm:text-xl font-semibold text-center sm:text-left">
+              Scan de QR code en bestuur de kraan via je gsm!
+            </p>
           </div>
-        </Hippo>
-        <Footer />
+
+          {/* Logos in bottom right */}
+          <div className="hidden md:flex items-center gap-4">
+            <Image
+              src="/arteveldelogo.svg"
+              alt="Artevelde Logo"
+              width={120}
+              height={60}
+              className="h-12 w-auto"
+            />
+            <Image
+              src="/warmsteweeklogo.svg"
+              alt="Warmste Week Logo"
+              width={120}
+              height={60}
+              className="h-12 w-auto"
+            />
+          </div>
+        </div>
       </div>
     </main>
   );
