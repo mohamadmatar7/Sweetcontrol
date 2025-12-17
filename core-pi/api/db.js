@@ -282,12 +282,12 @@ function deleteAllDonations() {
 
 /**
  * Stats: total paid donations from Mollie only
- * ✅ Counts ONLY from 16/12/2025 12:45 PM (local time)
+ * ✅ Counts ONLY from 16/12/2025 8:30 AM (local time)
  */
 function getMolliePaidTotals() {
-  // 16/12/2025 at 12:45 PM (local time)
+  // 16/12/2025 at 8:30 AM (local time)
   // Note: months are 0-indexed in JavaScript (11 = December)
-  const cutoff = new Date(2025, 11, 16, 12, 45, 0, 0).toISOString();
+  const cutoff = new Date(2025, 11, 16, 8, 30, 0, 0).toISOString();
 
   const row = db.prepare(`
     SELECT
