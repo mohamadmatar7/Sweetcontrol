@@ -12,8 +12,8 @@ export default function LiveStreamPlayer({ roomName = DEFAULT_ROOM, compact = fa
 
   const [status, setStatus] = useState("connecting"); // connecting | waiting | live | error | disconnected
   const [error, setError] = useState("");
-  const [muted, setMuted] = useState(true);
   const [connecting, setConnecting] = useState(false);
+  const [hasVideoTrack, setHasVideoTrack] = useState(false);
 
   const cleanup = useCallback(() => {
     if (videoTrackRef.current && videoRef.current) {
@@ -22,6 +22,7 @@ export default function LiveStreamPlayer({ roomName = DEFAULT_ROOM, compact = fa
       } catch {}
     }
     videoTrackRef.current = null;
+    setHasVideoTrack(false);
 
     if (roomRef.current) {
       try {
@@ -64,6 +65,7 @@ export default function LiveStreamPlayer({ roomName = DEFAULT_ROOM, compact = fa
 
       const { Room, RoomEvent } = await import("livekit-client");
       const room = new Room({
+        autoSubscribe: true,
         adaptiveStream: true,
         dynacast: true,
       });
@@ -86,6 +88,7 @@ export default function LiveStreamPlayer({ roomName = DEFAULT_ROOM, compact = fa
 
           track.attach(videoRef.current);
           videoTrackRef.current = track;
+          setHasVideoTrack(true);
           setStatus("live");
           videoRef.current.play().catch(() => {});
         }
@@ -97,11 +100,13 @@ export default function LiveStreamPlayer({ roomName = DEFAULT_ROOM, compact = fa
             track.detach(videoRef.current);
           } catch {}
           videoTrackRef.current = null;
+          setHasVideoTrack(false);
           setStatus("waiting");
         }
       });
 
       room.on(RoomEvent.Disconnected, () => {
+        setHasVideoTrack(false);
         setStatus("disconnected");
       });
 
@@ -121,12 +126,6 @@ export default function LiveStreamPlayer({ roomName = DEFAULT_ROOM, compact = fa
     connect();
     return () => cleanup();
   }, [connect, cleanup]);
-
-  useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.muted = muted;
-    }
-  }, [muted]);
 
   const statusLabel = (() => {
     if (status === "live") return "Live";
@@ -167,34 +166,33 @@ export default function LiveStreamPlayer({ roomName = DEFAULT_ROOM, compact = fa
         <video
           ref={videoRef}
           className="w-full h-full object-contain"
-          muted={muted}
+          muted
           playsInline
           autoPlay
           style={{ minHeight: compact ? 220 : 280, backgroundColor: "#000" }}
         />
 
-        {status !== "live" && (
-          <div className="absolute inset-0 flex items-center justify-center text-white/80 text-sm bg-black/50 backdrop-blur-[1px]">
-            {status === "error" ? "Stream niet beschikbaar" : "Verbinden met camera…"}
+        <div
+          className="pointer-events-none absolute left-[45%] top-[68%] -translate-x-1/2 -translate-y-1/2 z-10 opacity-70 animate-pulse"
+          aria-hidden="true"
+        >
+          <div
+            className={`${compact ? "h-16 w-16" : "h-20 w-20"} rounded-full border-2 border-white/70`}
+          />
+        </div>
+
+        {!hasVideoTrack && status !== "live" && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center text-white/80 text-sm bg-black/50 backdrop-blur-[1px]">
+            {status === "error"
+              ? "Stream niet beschikbaar"
+              : status === "waiting"
+                ? "Wachten op stream…"
+                : "Verbinden met stream…"}
           </div>
         )}
       </div>
 
       <div className="flex flex-wrap items-center gap-2 mt-3">
-        <button
-          onClick={() => {
-            const nextMuted = !muted;
-            setMuted(nextMuted);
-            if (videoRef.current) {
-              videoRef.current.muted = nextMuted;
-              if (!nextMuted) videoRef.current.play().catch(() => {});
-            }
-          }}
-          className="px-3 py-2 rounded-lg bg-white/10 text-white text-sm font-semibold hover:bg-white/20 transition"
-        >
-          {muted ? "Geluid aan" : "Geluid uit"}
-        </button>
-
         <button
           onClick={connect}
           disabled={connecting}
