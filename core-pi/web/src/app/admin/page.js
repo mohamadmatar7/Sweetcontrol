@@ -115,6 +115,7 @@ export default function AdminPage() {
 
   const [donations, setDonations] = useState([]);
   const [activeDonationId, setActiveDonationId] = useState(null);
+  const [stats, setStats] = useState(null);
 
   const [selectedId, setSelectedId] = useState("");
   const [delta, setDelta] = useState(1);
@@ -188,12 +189,14 @@ export default function AdminPage() {
 
     try {
       var data = await api("/api/admin/donations", { method: "GET" });
+      var statsData = await api("/api/admin/stats", { method: "GET" });
 
       var rows = (data && data.donations) ? data.donations : [];
       var normalized = rows.map(normalizeDonation);
 
       setDonations(normalized);
       setActiveDonationId((data && data.activeDonationId) ? data.activeDonationId : null);
+      setStats(statsData);
 
       // Keep selected row inputs in sync when polling updates
       if (selectedId) {
@@ -613,6 +616,85 @@ export default function AdminPage() {
           : null
       ),
 
+      // Metrics Section
+      stats ? h(
+        Card,
+        { className: "px-5 py-5 sm:px-7 sm:py-6" },
+        h(
+          "div",
+          { className: "mb-4" },
+          h(
+            "div",
+            {
+              className:
+                "text-[0.7rem] uppercase tracking-[0.22em] text-white/70",
+            },
+            "quick metrics"
+          ),
+          h(
+            "div",
+            { className: "jersey-10-regular text-2xl sm:text-3xl tracking-wide" },
+            "Overview"
+          )
+        ),
+        h(
+          "div",
+          { className: "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6" },
+          h(
+            "div",
+            { className: "bg-white/5 border border-white/10 rounded-2xl p-4" },
+            h("div", { className: "text-xs uppercase tracking-[0.18em] text-white/60 mb-1" }, "Total Donated"),
+            h("div", { className: "text-3xl font-bold text-emerald-400" }, "€" + (stats.totalDonated || 0).toFixed(2))
+          ),
+          h(
+            "div",
+            { className: "bg-white/5 border border-white/10 rounded-2xl p-4" },
+            h("div", { className: "text-xs uppercase tracking-[0.18em] text-white/60 mb-1" }, "Total Plays"),
+            h("div", { className: "text-3xl font-bold text-blue-400" }, String(stats.totalPlays || 0))
+          ),
+          h(
+            "div",
+            { className: "bg-white/5 border border-white/10 rounded-2xl p-4" },
+            h("div", { className: "text-xs uppercase tracking-[0.18em] text-white/60 mb-1" }, "Total Players"),
+            h("div", { className: "text-3xl font-bold text-purple-400" }, String(stats.totalPlayers || 0))
+          ),
+          h(
+            "div",
+            { className: "bg-white/5 border border-white/10 rounded-2xl p-4" },
+            h("div", { className: "text-xs uppercase tracking-[0.18em] text-white/60 mb-1" }, "Avg per Player"),
+            h("div", { className: "text-3xl font-bold text-yellow-400" }, 
+              stats.totalPlayers > 0 
+                ? "€" + (stats.totalDonated / stats.totalPlayers).toFixed(2)
+                : "€0.00"
+            )
+          )
+        ),
+        h(
+          "div",
+          { className: "bg-white/5 border border-white/10 rounded-2xl p-4" },
+          h("div", { className: "text-xs uppercase tracking-[0.18em] text-white/60 mb-3" }, "Games Over Time"),
+          stats.gamesOverTime && stats.gamesOverTime.length > 0
+            ? h(
+                "div",
+                { className: "flex items-end gap-1 h-32" },
+                stats.gamesOverTime.map(function (day, idx) {
+                  var maxPlays = Math.max.apply(Math, stats.gamesOverTime.map(function (d) { return d.plays; }));
+                  var height = maxPlays > 0 ? (day.plays / maxPlays) * 100 : 0;
+                  return h(
+                    "div",
+                    {
+                      key: idx,
+                      className: "flex-1 bg-gradient-to-t from-purple-500 to-pink-500 rounded-t min-h-[4px]",
+                      style: { height: height + "%" },
+                      title: day.date + ": " + day.plays + " plays",
+                    }
+                  );
+                })
+              )
+            : h("div", { className: "text-sm text-white/60 py-8 text-center" }, "No data yet")
+        )
+      ) : null,
+
       // Main layout
       h(
         "div",
@@ -689,15 +771,22 @@ export default function AdminPage() {
                       var isSelected = String(selectedId) === String(d.id);
                       var isActiveRow =
                         Number(activeDonationId) === Number(d.id) || d.status === "active";
+                      
+                      // Color coding: green if donated, yellow if not
+                      var hasDonated = d.amountEuros !== null && d.amountEuros !== undefined && d.amountEuros > 0;
+                      var rowBgColor = hasDonated 
+                        ? "bg-emerald-500/10 hover:bg-emerald-500/15" 
+                        : "bg-yellow-500/10 hover:bg-yellow-500/15";
 
                       return h(
                         "tr",
                         {
                           key: d.id,
                           className: cls(
-                            "border-t border-white/10",
-                            isSelected ? "bg-yellow-300/10" : "",
-                            isActiveRow ? "ring-1 ring-emerald-300/40" : ""
+                            "border-t border-white/10 transition-colors",
+                            rowBgColor,
+                            isSelected ? "!bg-purple-500/20 ring-2 ring-purple-400/40" : "",
+                            isActiveRow ? "ring-2 ring-blue-400/40" : ""
                           ),
                           onClick: function () {
                             pickId(d.id);

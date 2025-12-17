@@ -8,6 +8,7 @@ const {
     deleteAllDonations,
     requeueToEnd,
     setDonationStatus,
+    getAdminStats,
 } = require('./db');
 
 /**
@@ -64,6 +65,15 @@ function createAdminRouter(game) {
         const rows = listAllDonations();
         const activeDonationId = game.getActiveState?.().activeDonationId || null;
         return res.json({ donations: rows, activeDonationId });
+    });
+
+    /**
+     * GET /api/admin/stats
+     * Get comprehensive admin statistics
+     */
+    router.get('/stats', requireAdmin, (req, res) => {
+        const stats = getAdminStats();
+        return res.json(stats);
     });
 
     /**

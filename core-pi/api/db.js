@@ -315,6 +315,52 @@ function getMolliePaidTotals() {
   };
 }
 
+/**
+ * Admin stats: comprehensive metrics
+ */
+function getAdminStats() {
+  // All time donated
+  const totalDonated = db.prepare(`
+    SELECT COALESCE(SUM(amount_eur), 0) AS total
+    FROM donations
+    WHERE amount_eur IS NOT NULL
+  `).get();
+
+  // All time plays (credits used)
+  const totalPlays = db.prepare(`
+    SELECT COALESCE(SUM(credits_used), 0) AS total
+    FROM donations
+  `).get();
+
+  // All time players (unique paid donations)
+  const totalPlayers = db.prepare(`
+    SELECT COUNT(*) AS total
+    FROM donations
+    WHERE amount_eur IS NOT NULL
+  `).get();
+
+  // Games over time (by date)
+  const gamesOverTime = db.prepare(`
+    SELECT 
+      DATE(created_at) AS date,
+      SUM(credits_used) AS plays
+    FROM donations
+    WHERE amount_eur IS NOT NULL
+    GROUP BY DATE(created_at)
+    ORDER BY date ASC
+  `).all();
+
+  return {
+    totalDonated: Number(totalDonated.total || 0),
+    totalPlays: Number(totalPlays.total || 0),
+    totalPlayers: Number(totalPlayers.total || 0),
+    gamesOverTime: gamesOverTime.map(row => ({
+      date: row.date,
+      plays: Number(row.plays || 0),
+    })),
+  };
+}
+
 
 
 module.exports = {
@@ -342,4 +388,5 @@ module.exports = {
 
   // Stats
   getMolliePaidTotals,
+  getAdminStats,
 };
