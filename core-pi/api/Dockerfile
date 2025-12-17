@@ -7,7 +7,7 @@ WORKDIR /usr/src/app
 # + Install gpiod tools to provide gpioset/gpioget inside the container
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
-       python3 make g++ gpiod mpg123 \
+       python3 make g++ gpiod mpg123 ffmpeg \
   && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./

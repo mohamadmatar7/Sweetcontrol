@@ -68,6 +68,7 @@ const holdTimers = new Map();
 */
 const FREE_MODE = String(process.env.FREE_MODE || "false").toLowerCase() === "true";
 
+
 // LiveKit streaming (optional)
 const LIVEKIT_URL = process.env.LIVEKIT_URL;
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY;
@@ -539,7 +540,6 @@ app.get('/api/stats/mollie-total', (req, res) => {
   const stats = getMolliePaidTotals();
   return res.json({ ok: true, ...stats });
 });
-
 
 
 app.use('/api/admin', createAdminRouter(game));
