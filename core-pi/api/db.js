@@ -339,13 +339,16 @@ function getAdminStats() {
     WHERE amount_eur IS NOT NULL
   `).get();
 
-  // Games over time (by date)
+  // Games over time (by date) - only completed donations with payment
   const gamesOverTime = db.prepare(`
     SELECT 
       DATE(created_at) AS date,
+      COUNT(*) AS donations,
       SUM(credits_used) AS plays
     FROM donations
-    WHERE amount_eur IS NOT NULL
+    WHERE status = 'done' 
+      AND amount_eur IS NOT NULL
+      AND amount_eur > 0
     GROUP BY DATE(created_at)
     ORDER BY date ASC
   `).all();
@@ -356,6 +359,7 @@ function getAdminStats() {
     totalPlayers: Number(totalPlayers.total || 0),
     gamesOverTime: gamesOverTime.map(row => ({
       date: row.date,
+      donations: Number(row.donations || 0),
       plays: Number(row.plays || 0),
     })),
   };

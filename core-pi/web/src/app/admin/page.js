@@ -672,21 +672,21 @@ export default function AdminPage() {
         h(
           "div",
           { className: "bg-white/5 border border-white/10 rounded-2xl p-4" },
-          h("div", { className: "text-xs uppercase tracking-[0.18em] text-white/60 mb-3" }, "Games Over Time"),
+          h("div", { className: "text-xs uppercase tracking-[0.18em] text-white/60 mb-3" }, "Completed Donations Over Time"),
           stats.gamesOverTime && stats.gamesOverTime.length > 0
             ? h(
                 "div",
                 { className: "flex items-end gap-1 h-32" },
                 stats.gamesOverTime.map(function (day, idx) {
-                  var maxPlays = Math.max.apply(Math, stats.gamesOverTime.map(function (d) { return d.plays; }));
-                  var height = maxPlays > 0 ? (day.plays / maxPlays) * 100 : 0;
+                  var maxDonations = Math.max.apply(Math, stats.gamesOverTime.map(function (d) { return d.donations; }));
+                  var height = maxDonations > 0 ? (day.donations / maxDonations) * 100 : 0;
                   return h(
                     "div",
                     {
                       key: idx,
-                      className: "flex-1 bg-gradient-to-t from-purple-500 to-pink-500 rounded-t min-h-[4px]",
+                      className: "flex-1 bg-gradient-to-t from-emerald-500 to-emerald-300 rounded-t min-h-[4px] hover:from-emerald-400 hover:to-emerald-200 transition-colors",
                       style: { height: height + "%" },
-                      title: day.date + ": " + day.plays + " plays",
+                      title: day.date + ": " + day.donations + " donations (" + day.plays + " plays)",
                     }
                   );
                 })
