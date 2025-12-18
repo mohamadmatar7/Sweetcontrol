@@ -195,6 +195,8 @@ export default function ArcadePage() {
 
   // --- 3. RANDOM FLUCTUATION INTERVAL ---
   // Adds a random 1-5 up or down fluctuation every 1 minute
+  // Only fluctuates when sugar level is in safe range (70-180)
+  // When too high (>180) or too low (<70), it stays there until user catches an item
   useEffect(() => {
     const interval = setInterval(() => {
       setHistory((prev) => {
@@ -202,6 +204,12 @@ export default function ArcadePage() {
         
         // Get the last index value
         const lastIndex = prev[prev.length - 1].index;
+        
+        // Only fluctuate if in safe range (70-180)
+        // If too high (>180) or too low (<70), don't fluctuate
+        if (lastIndex > 180 || lastIndex < 70) {
+          return prev; // Don't add a new point, keep the current value
+        }
         
         // Generate random fluctuation: 1-5, randomly up or down
         const fluctuation = Math.floor(Math.random() * 5) + 1; // 1-5
@@ -220,6 +228,12 @@ export default function ArcadePage() {
       setSugarState((prev) => {
         if (!prev || prev.index == null) return prev;
         const lastIndex = prev.index;
+        
+        // Only fluctuate if in safe range (70-180)
+        if (lastIndex > 180 || lastIndex < 70) {
+          return prev; // Don't change, keep the current value
+        }
+        
         const fluctuation = Math.floor(Math.random() * 5) + 1;
         const direction = Math.random() < 0.5 ? -1 : 1;
         const change = fluctuation * direction;
