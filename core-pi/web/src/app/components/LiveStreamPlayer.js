@@ -4,6 +4,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 const DEFAULT_ROOM = process.env.NEXT_PUBLIC_LIVEKIT_ROOM || "sweet-control";
+const VISIBILITY_TIMEOUT_MS = Number(
+  process.env.NEXT_PUBLIC_LIVEKIT_VISIBILITY_TIMEOUT_MS ?? 60_000
+);
+const MAX_SESSION_MS = Number(
+  process.env.NEXT_PUBLIC_LIVEKIT_MAX_SESSION_MS ?? 4 * 60 * 60 * 1000
+);
 
 export default function LiveStreamPlayer({
   roomName = DEFAULT_ROOM,
@@ -130,6 +136,63 @@ export default function LiveStreamPlayer({
     connect();
     return () => cleanup();
   }, [connect, cleanup]);
+
+  // Auto-disconnect when tab has been hidden for a while
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+
+    let visibilityTimeoutId = null;
+
+    const scheduleDisconnect = () => {
+      if (visibilityTimeoutId != null) return;
+      visibilityTimeoutId = window.setTimeout(() => {
+        cleanup();
+        setStatus("disconnected");
+      }, VISIBILITY_TIMEOUT_MS);
+    };
+
+    const clearScheduledDisconnect = () => {
+      if (visibilityTimeoutId != null) {
+        window.clearTimeout(visibilityTimeoutId);
+        visibilityTimeoutId = null;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        scheduleDisconnect();
+      } else {
+        clearScheduledDisconnect();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    // In case the page is already hidden when mounted
+    handleVisibilityChange();
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      clearScheduledDisconnect();
+    };
+  }, [cleanup]);
+
+  // Hard cap session length to avoid "overnight" viewers
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const startedAt = Date.now();
+    const intervalId = window.setInterval(() => {
+      const elapsed = Date.now() - startedAt;
+      if (elapsed >= MAX_SESSION_MS) {
+        window.clearInterval(intervalId);
+        cleanup();
+        setStatus("disconnected");
+      }
+    }, 60_000); // check every minute
+
+    return () => window.clearInterval(intervalId);
+  }, [cleanup]);
 
   const statusLabel = (() => {
     if (status === "live") return "Live";
