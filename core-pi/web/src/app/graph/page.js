@@ -128,22 +128,53 @@ export default function ArcadePage() {
   const isDanger = isHigh || isLow;
 
   // --- 1. INITIAL DATA FETCH ---
-  // Fetches the latest known state from the API when the page loads
+  // Fetches the latest known state and history from the API when the page loads
   useEffect(() => {
     if (!API_BASE_URL) return;
     
     async function fetchSugar() {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/sugar?t=${Date.now()}`);
-        if (res.ok) {
+        // Fetch both current state and history in parallel
+        const [stateRes, historyRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/api/sugar?t=${Date.now()}`),
+          fetch(`${API_BASE_URL}/api/sugar/history?limit=60&t=${Date.now()}`)
+        ]);
+        
+        if (stateRes.ok) {
+          const data = await stateRes.json();
+          if (data.ok && data.index != null) {
+            setSugarState(data);
+          }
+        }
+        
+        if (historyRes.ok) {
+          const historyData = await historyRes.json();
+          if (historyData.ok && historyData.history) {
+            // Convert history to the format expected by the graph
+            const formattedHistory = historyData.history.map((point) => ({
+              t: new Date(point.t).getTime(), // Convert ISO string to timestamp
+              index: point.index,
+              isCaughtItem: point.isCaughtItem === 1 || point.isCaughtItem === true,
+            }));
+            setHistory(formattedHistory);
+          }
+        }
+      } catch (err) { 
+        console.error("API Fetch Error:", err); 
+        // Fallback: if history fetch fails, at least try to get current state
+        try {
+          const res = await fetch(`${API_BASE_URL}/api/sugar?t=${Date.now()}`);
+          if (res.ok) {
             const data = await res.json();
             if (data.ok && data.index != null) {
-                setSugarState(data);
-                // Initialize graph with the first point (not a caught item)
-                setHistory([{ t: Date.now(), index: data.index, isCaughtItem: false }]);
+              setSugarState(data);
+              setHistory([{ t: Date.now(), index: data.index, isCaughtItem: false }]);
             }
+          }
+        } catch (fallbackErr) {
+          console.error("Fallback fetch error:", fallbackErr);
         }
-      } catch (err) { console.error("API Fetch Error:", err); }
+      }
     }
     fetchSugar();
   }, []);
@@ -176,14 +207,18 @@ export default function ArcadePage() {
           lastLabel: payload.lastLabel ?? null 
       });
 
-      // Update graph history (keep max 50 points to allow for random fluctuations)
+      // Update graph history (keep max 60 points to match API history limit)
       // Mark as caught item only if there's a label (meaning it came from a scanned item)
       // Random fluctuations won't have a label, so they won't show as points
       if (payload.index != null) {
         setHistory((prev) => {
             const isCaughtItem = payload.lastLabel != null && payload.lastLabel.trim() !== '';
-            const next = [...prev, { t: Date.now(), index: payload.index, isCaughtItem: isCaughtItem }];
-            return next.slice(-50); // Keep more points to show the line smoothly
+            const next = [...prev, { 
+              t: payload.updatedAt ? new Date(payload.updatedAt).getTime() : Date.now(), 
+              index: payload.index, 
+              isCaughtItem: isCaughtItem 
+            }];
+            return next.slice(-60); // Keep max 60 points to match history API
         });
       }
     });

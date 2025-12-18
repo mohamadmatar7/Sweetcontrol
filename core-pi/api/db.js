@@ -381,7 +381,17 @@ db.exec(`
     caught_at TEXT NOT NULL
   );
   
+  CREATE TABLE IF NOT EXISTS sugar_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    index_value INTEGER NOT NULL,
+    effect INTEGER,
+    label TEXT,
+    is_caught_item INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+  );
+  
   CREATE INDEX IF NOT EXISTS idx_caught_items_caught_at ON caught_items(caught_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_sugar_history_created_at ON sugar_history(created_at DESC);
 `);
 
 /**
@@ -458,6 +468,39 @@ function getCaughtItemsHistory(limit = 100) {
   `).all(limit);
 }
 
+/**
+ * Record a sugar state change in history (both caught items and fluctuations)
+ */
+function recordSugarHistory({ index, effect, label, isCaughtItem }) {
+  db.prepare(`
+    INSERT INTO sugar_history (index_value, effect, label, is_caught_item, created_at)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(
+    index,
+    effect !== undefined ? effect : null,
+    label || null,
+    isCaughtItem ? 1 : 0,
+    nowIso()
+  );
+}
+
+/**
+ * Get sugar history (last N data points)
+ */
+function getSugarHistory(limit = 60) {
+  return db.prepare(`
+    SELECT 
+      index_value AS index,
+      effect,
+      label,
+      is_caught_item AS isCaughtItem,
+      created_at AS t
+    FROM sugar_history
+    ORDER BY created_at DESC
+    LIMIT ?
+  `).all(limit).reverse(); // Reverse to get chronological order (oldest first)
+}
+
 
 
 module.exports = {
@@ -492,4 +535,6 @@ module.exports = {
   updateSugarState,
   recordCaughtItem,
   getCaughtItemsHistory,
+  recordSugarHistory,
+  getSugarHistory,
 };

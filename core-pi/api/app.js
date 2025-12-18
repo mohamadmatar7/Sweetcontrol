@@ -15,6 +15,7 @@ const {
     getDonationByToken,
     listQueue,
     getMolliePaidTotals,
+    getSugarHistory,
 } = require('./db');
 
 const app = express();
@@ -489,6 +490,26 @@ app.get('/api/sugar', (req, res) => {
     return res.json({
         ok: true,
         ...state,
+    });
+});
+
+/**
+ * Sugar history endpoint - returns last N data points for the graph
+ * Query param: limit (default: 60)
+ */
+app.get('/api/sugar/history', (req, res) => {
+    // Hard-disable caching
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    res.set('Surrogate-Control', 'no-store');
+
+    const limit = parseInt(req.query.limit || '60', 10);
+    const history = getSugarHistory(Math.min(limit, 100)); // Cap at 100 for safety
+
+    return res.json({
+        ok: true,
+        history: history,
     });
 });
 

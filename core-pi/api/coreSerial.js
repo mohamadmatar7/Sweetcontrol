@@ -3,7 +3,7 @@
 
 const Pusher = require('pusher');
 const sfx = require('./sfx');
-const { getSugarState: dbGetSugarState, updateSugarState: dbUpdateSugarState, recordCaughtItem } = require('./db');
+const { getSugarState: dbGetSugarState, updateSugarState: dbUpdateSugarState, recordCaughtItem, recordSugarHistory } = require('./db');
 
 const pusher = new Pusher({
   appId: process.env.SOKETI_APP_ID,
@@ -83,6 +83,14 @@ function applyCoreValue({ value, label }) {
     afterValue: afterValue,
     effect: effect,
   });
+  
+  // Record in history (caught item)
+  recordSugarHistory({
+    index: afterValue,
+    effect: effect,
+    label: label || null,
+    isCaughtItem: true,
+  });
 
   // Broadcast update
   sfx.playScanned();
@@ -122,6 +130,14 @@ function applyRandomFluctuation() {
     index: newIndex,
     effect: null, // Random fluctuations don't have an effect
     lastLabel: null, // Keep the last caught item label
+  });
+  
+  // Record in history (fluctuation, not a caught item)
+  recordSugarHistory({
+    index: newIndex,
+    effect: change, // Store the change amount
+    label: null,
+    isCaughtItem: false,
   });
   
   // Broadcast update (silently, no sound effect)
