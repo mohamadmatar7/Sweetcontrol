@@ -99,9 +99,6 @@ export default function ArcadePage() {
   // Each point has: { t: timestamp, index: value, isCaughtItem: boolean }
   const [history, setHistory] = useState([]);
   
-  // State to hold the last caught item from database (used when lastLabel is null/empty)
-  const [lastCaughtFromDb, setLastCaughtFromDb] = useState(null);
-  
   // Ref to store caught item indices for the chart plugin to access
   const caughtItemIndicesRef = useRef([]);
   
@@ -122,13 +119,8 @@ export default function ArcadePage() {
   // --- DERIVED STATE ---
   // Safely get current value, default to 100 if no data yet
   const currentVal = sugarState?.index ?? 100; 
-  // Use lastLabel from state if available, otherwise fall back to database value
-  const scannedLabelRaw = (sugarState?.lastLabel && sugarState.lastLabel.trim() !== "" && sugarState.lastLabel.toLowerCase() !== "niks") 
-    ? sugarState.lastLabel 
-    : (lastCaughtFromDb?.label || null);
-  const scannedLabel = scannedLabelRaw?.toLowerCase() ?? "";
-  // Check if we have a valid caught item (not "niks", null, or empty)
-  const hasCaughtItem = scannedLabelRaw && scannedLabelRaw.trim() !== "" && scannedLabelRaw.toLowerCase() !== "niks";
+  const scannedLabelRaw = sugarState?.lastLabel ?? "niks";
+  const scannedLabel = scannedLabelRaw.toLowerCase();
   
   // Determine health status based on glucose thresholds
   const isHigh = currentVal > 180;
@@ -152,21 +144,6 @@ export default function ArcadePage() {
           const data = await stateRes.json();
           if (data.ok && data.index != null) {
             setSugarState(data);
-            
-            // If lastLabel is null, empty, or "niks", fetch last caught item from database
-            if (!data.lastLabel || data.lastLabel.trim() === "" || data.lastLabel.toLowerCase() === "niks") {
-              try {
-                const lastCaughtRes = await fetch(`${API_BASE_URL}/api/sugar/last-caught?t=${Date.now()}`);
-                if (lastCaughtRes.ok) {
-                  const lastCaughtData = await lastCaughtRes.json();
-                  if (lastCaughtData.ok && lastCaughtData.lastCaught) {
-                    setLastCaughtFromDb(lastCaughtData.lastCaught);
-                  }
-                }
-              } catch (err) {
-                console.error("Failed to fetch last caught item:", err);
-              }
-            }
           }
         }
         
@@ -311,7 +288,7 @@ export default function ArcadePage() {
 
       drawLine(180, THEME.high, 'MAX (180)');
       drawLine(70, THEME.high, 'MIN (70)');
-    }
+      }
   };
 
   // --- CHART CONFIGURATION ---
@@ -496,30 +473,28 @@ export default function ArcadePage() {
             </div>
         </div>
 
-        {/* BOTTOM SECTION: SCANNER BAR - Only show if we have a caught item */}
-        {hasCaughtItem && (
-            <div className="h-[70px] shrink-0 bg-black border-t-4 border-[#FF6B00] flex items-center justify-between px-6 z-30">
-                <div className="flex items-center gap-4 w-full">
-                    
-                    {/* Scanned Icon */}
-                    {/* <div className="w-12 h-12 shrink-0 rounded-full bg-white flex items-center justify-center border-2 border-[#FF6B00]">
-                        <span className="text-2xl animate-breathe">
-                            {currentIcon}
-                        </span>
-                    </div> */}
+        {/* BOTTOM SECTION: SCANNER BAR */}
+        <div className="h-[70px] shrink-0 bg-black border-t-4 border-[#FF6B00] flex items-center justify-between px-6 z-30">
+            <div className="flex items-center gap-4 w-full">
+                
+                {/* Scanned Icon */}
+                {/* <div className="w-12 h-12 shrink-0 rounded-full bg-white flex items-center justify-center border-2 border-[#FF6B00]">
+                    <span className="text-2xl animate-breathe">
+                        {currentIcon}
+                    </span>
+                </div> */}
 
-                    {/* Scanned Text */}
-                    <div className="flex flex-row justify-start items-center gap-4 flex-1 ml-2 overflow-hidden">
-                        <span className="font-jersey text-xl text-[#FF6B00] mb-0.5 tracking-widest uppercase">
-                            LAATST GEVANGEN:
-                        </span>
-                        <span className="font-chewy text-3xl uppercase tracking-wide text-white leading-none truncate">
-                            {scannedLabelRaw}
-                        </span>
-                    </div>
+                {/* Scanned Text */}
+                <div className="flex flex-row justify-start items-center gap-4 flex-1 ml-2 overflow-hidden">
+                    <span className="font-jersey text-xl text-[#FF6B00] mb-0.5 tracking-widest uppercase">
+                        LAATST GEVANGEN:
+                    </span>
+                    <span className="font-chewy text-3xl uppercase tracking-wide text-white leading-none truncate">
+                        {scannedLabelRaw}
+                    </span>
                 </div>
             </div>
-        )}
+        </div>
 
       </div>
     </main>

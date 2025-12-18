@@ -16,7 +16,6 @@ const {
     listQueue,
     getMolliePaidTotals,
     getSugarHistory,
-    getCaughtItemsHistory,
 } = require('./db');
 
 const app = express();
@@ -511,29 +510,6 @@ app.get('/api/sugar/history', (req, res) => {
     return res.json({
         ok: true,
         history: history,
-    });
-});
-
-/**
- * Get last caught item from database
- * Returns the most recently caught item, or null if none exists
- */
-app.get('/api/sugar/last-caught', (req, res) => {
-    // Hard-disable caching
-    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    res.set('Pragma', 'no-cache');
-    res.set('Expires', '0');
-    res.set('Surrogate-Control', 'no-store');
-
-    const caughtItems = getCaughtItemsHistory(1);
-    const lastCaught = caughtItems && caughtItems.length > 0 ? caughtItems[0] : null;
-
-    return res.json({
-        ok: true,
-        lastCaught: lastCaught ? {
-            label: lastCaught.label,
-            caughtAt: lastCaught.caught_at,
-        } : null,
     });
 });
 
