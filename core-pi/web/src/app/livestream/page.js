@@ -43,41 +43,10 @@ export default function LiveStreamPage() {
   const [sugarState, setSugarState] = useState(null);
   const [history, setHistory] = useState([]);
   const [mounted, setMounted] = useState(false);
-  const [showMobileWarning, setShowMobileWarning] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
-
-  // Mobile warning (show once per browser)
-  useEffect(() => {
-    if (!mounted) return;
-
-    const KEY = "livestream_mobile_warning_ack_v1";
-    const alreadyAcked =
-      typeof window !== "undefined" &&
-      window.localStorage &&
-      window.localStorage.getItem(KEY) === "1";
-
-    if (alreadyAcked) return;
-
-    const check = () => {
-      if (typeof window === "undefined") return;
-      const isMobileWidth = window.innerWidth < 500;
-      setShowMobileWarning(isMobileWidth);
-    };
-
-    check();
-    window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
-  }, [mounted]);
-
-  const dismissMobileWarning = () => {
-    try {
-      window.localStorage?.setItem("livestream_mobile_warning_ack_v1", "1");
-    } catch {}
-    setShowMobileWarning(false);
-  };
 
   const currentVal = sugarState?.index ?? 100;
   const scannedLabelRaw = sugarState?.lastLabel ?? "niks";
@@ -341,48 +310,6 @@ export default function LiveStreamPage() {
           border-top: 20px solid white;
         }
       `}</style>
-
-      {/* Mobile warning modal */}
-      {showMobileWarning && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-black/60 backdrop-blur-[2px]"
-            onClick={dismissMobileWarning}
-            aria-hidden="true"
-          />
-          <div
-            role="dialog"
-            aria-modal="true"
-            className="relative w-full max-w-md rounded-2xl bg-black/20 backdrop-blur-sm border-2 border-[#FF6B00]/50 shadow-2xl p-5"
-          >
-            <p className="text-[11px] uppercase tracking-[0.18em] text-white/60">
-              Let op
-            </p>
-            <h2 className="mt-1 text-xl font-bold">
-              Deze pagina is gemaakt voor desktop
-            </h2>
-            <p className="mt-3 text-white/80 text-sm leading-relaxed">
-               Gebruik bij voorkeur een desktop
-              of laptop.
-            </p>
-
-            <div className="mt-5 flex flex-col sm:flex-row gap-3 sm:justify-end">
-              <Link
-                href="/"
-                className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/15 border border-white/10 text-white font-semibold text-sm text-center"
-              >
-                Terug
-              </Link>
-              <button
-                onClick={dismissMobileWarning}
-                className="px-4 py-2 rounded-lg bg-gradient-to-r from-[#7bb4ff] to-[#5a3ffb] text-white font-semibold text-sm"
-              >
-                Open toch de livestream
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-4 lg:py-6 min-h-screen flex flex-col">
         {/* Header row (back button + centered title) */}
