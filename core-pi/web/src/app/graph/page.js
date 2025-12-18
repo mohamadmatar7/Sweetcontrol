@@ -288,35 +288,7 @@ export default function ArcadePage() {
 
       drawLine(180, THEME.high, 'MAX (180)');
       drawLine(70, THEME.high, 'MIN (70)');
-    },
-
-    // Draw the Numeric Values above the points (Foreground layer)
-    // Only show values for caught items
-    afterDatasetsDraw: (chart) => {
-        const { ctx } = chart;
-        const caughtItemIndices = caughtItemIndicesRef.current;
-        chart.data.datasets.forEach((dataset, i) => {
-          const meta = chart.getDatasetMeta(i);
-          meta.data.forEach((element, index) => {
-            // Only draw value if this is a caught item
-            if (!caughtItemIndices[index]) return;
-            
-            const value = dataset.data[index];
-            const { x, y } = element.tooltipPosition();
-            
-            ctx.save();
-            // Color logic: White if safe, Orange if dangerous
-            const isDangerPoint = value < 70 || value > 180;
-            ctx.fillStyle = isDangerPoint ? THEME.high : THEME.white;
-            
-            ctx.font = 'bold 14px "Jersey 10"';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'bottom';
-            ctx.fillText(Math.round(value), x, y - 15); // Place text 15px above dot
-            ctx.restore();
-          });
-        });
-      }
+    }
   };
 
   // --- CHART CONFIGURATION ---
@@ -332,11 +304,8 @@ export default function ArcadePage() {
         data: history.map((p) => p.index),
         borderWidth: 6,
         tension: 0.4, // Smooth curve
-        // Only show points for caught items, hide others
-        pointRadius: (ctx) => {
-          const index = ctx.dataIndex;
-          return caughtItemIndices[index] ? 6 : 0; // Show point only if caught item
-        },
+        // Hide all data points - we only show the line
+        pointRadius: 0,
         pointBackgroundColor: THEME.bg, 
         pointBorderWidth: 3,
         pointHoverRadius: 8,
