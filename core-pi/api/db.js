@@ -356,6 +356,108 @@ function getAdminStats() {
   };
 }
 
+// ============================================================================
+// SUGAR STATE & CAUGHT ITEMS
+// ============================================================================
+
+/**
+ * Create tables for sugar state and caught items tracking
+ */
+db.exec(`
+  CREATE TABLE IF NOT EXISTS sugar_state (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    index_value INTEGER NOT NULL DEFAULT 100,
+    last_effect INTEGER,
+    last_label TEXT,
+    updated_at TEXT NOT NULL
+  );
+  
+  CREATE TABLE IF NOT EXISTS caught_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    label TEXT NOT NULL,
+    before_value INTEGER NOT NULL,
+    after_value INTEGER NOT NULL,
+    effect INTEGER NOT NULL,
+    caught_at TEXT NOT NULL
+  );
+  
+  CREATE INDEX IF NOT EXISTS idx_caught_items_caught_at ON caught_items(caught_at DESC);
+`);
+
+/**
+ * Initialize sugar state if it doesn't exist
+ */
+function initSugarState() {
+  const existing = db.prepare(`SELECT * FROM sugar_state WHERE id = 1`).get();
+  if (!existing) {
+    db.prepare(`
+      INSERT INTO sugar_state (id, index_value, updated_at)
+      VALUES (1, 100, ?)
+    `).run(nowIso());
+  }
+}
+
+// Initialize on module load
+initSugarState();
+
+/**
+ * Get current sugar state from database
+ */
+function getSugarState() {
+  const row = db.prepare(`SELECT * FROM sugar_state WHERE id = 1`).get();
+  if (!row) {
+    initSugarState();
+    return getSugarState();
+  }
+  return {
+    index: row.index_value,
+    effect: row.last_effect,
+    lastLabel: row.last_label,
+    updatedAt: row.updated_at,
+  };
+}
+
+/**
+ * Update sugar state in database
+ */
+function updateSugarState({ index, effect, lastLabel }) {
+  const now = nowIso();
+  db.prepare(`
+    UPDATE sugar_state
+    SET index_value = ?,
+        last_effect = ?,
+        last_label = ?,
+        updated_at = ?
+    WHERE id = 1
+  `).run(
+    index,
+    effect !== undefined ? effect : null,
+    lastLabel || null,
+    now
+  );
+}
+
+/**
+ * Record a caught item
+ */
+function recordCaughtItem({ label, beforeValue, afterValue, effect }) {
+  db.prepare(`
+    INSERT INTO caught_items (label, before_value, after_value, effect, caught_at)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(label || 'unknown', beforeValue, afterValue, effect, nowIso());
+}
+
+/**
+ * Get caught items history (for admin/stats)
+ */
+function getCaughtItemsHistory(limit = 100) {
+  return db.prepare(`
+    SELECT * FROM caught_items
+    ORDER BY caught_at DESC
+    LIMIT ?
+  `).all(limit);
+}
+
 
 
 module.exports = {
@@ -384,4 +486,10 @@ module.exports = {
   // Stats
   getMolliePaidTotals,
   getAdminStats,
+
+  // Sugar state exports
+  getSugarState,
+  updateSugarState,
+  recordCaughtItem,
+  getCaughtItemsHistory,
 };

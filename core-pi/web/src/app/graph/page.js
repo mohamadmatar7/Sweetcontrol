@@ -177,10 +177,12 @@ export default function ArcadePage() {
       });
 
       // Update graph history (keep max 50 points to allow for random fluctuations)
-      // Mark this as a caught item since it came from a sugar-update event
+      // Mark as caught item only if there's a label (meaning it came from a scanned item)
+      // Random fluctuations won't have a label, so they won't show as points
       if (payload.index != null) {
         setHistory((prev) => {
-            const next = [...prev, { t: Date.now(), index: payload.index, isCaughtItem: true }];
+            const isCaughtItem = payload.lastLabel != null && payload.lastLabel.trim() !== '';
+            const next = [...prev, { t: Date.now(), index: payload.index, isCaughtItem: isCaughtItem }];
             return next.slice(-50); // Keep more points to show the line smoothly
         });
       }
@@ -193,57 +195,8 @@ export default function ArcadePage() {
     };
   }, []);
 
-  // --- 3. RANDOM FLUCTUATION INTERVAL ---
-  // Adds a random 1-5 up or down fluctuation every 1 minute
-  // Only fluctuates when sugar level is in safe range (70-180)
-  // When too high (>180) or too low (<70), it stays there until user catches an item
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setHistory((prev) => {
-        if (prev.length === 0) return prev;
-        
-        // Get the last index value
-        const lastIndex = prev[prev.length - 1].index;
-        
-        // Only fluctuate if in safe range (70-180)
-        // If too high (>180) or too low (<70), don't fluctuate
-        if (lastIndex > 180 || lastIndex < 70) {
-          return prev; // Don't add a new point, keep the current value
-        }
-        
-        // Generate random fluctuation: 1-5, randomly up or down
-        const fluctuation = Math.floor(Math.random() * 5) + 1; // 1-5
-        const direction = Math.random() < 0.5 ? -1 : 1; // Random up or down
-        const change = fluctuation * direction;
-        
-        // Clamp the new value between 50 and 250
-        const newIndex = Math.max(50, Math.min(250, lastIndex + change));
-        
-        // Add new point (not a caught item)
-        const next = [...prev, { t: Date.now(), index: newIndex, isCaughtItem: false }];
-        return next.slice(-50); // Keep max 50 points
-      });
-      
-      // Also update the sugarState to reflect the new value
-      setSugarState((prev) => {
-        if (!prev || prev.index == null) return prev;
-        const lastIndex = prev.index;
-        
-        // Only fluctuate if in safe range (70-180)
-        if (lastIndex > 180 || lastIndex < 70) {
-          return prev; // Don't change, keep the current value
-        }
-        
-        const fluctuation = Math.floor(Math.random() * 5) + 1;
-        const direction = Math.random() < 0.5 ? -1 : 1;
-        const change = fluctuation * direction;
-        const newIndex = Math.max(50, Math.min(250, lastIndex + change));
-        return { ...prev, index: newIndex };
-      });
-    }, 60000); // Every 1 minute (60000ms)
-
-    return () => clearInterval(interval);
-  }, []);
+  // Note: Random fluctuations are now handled server-side in coreSerial.js
+  // All updates (both caught items and fluctuations) come via Pusher 'sugar-update' events
 
   // --- VISUAL LOGIC ---
   // Determine which Hippo image, text, and animations to show based on status
