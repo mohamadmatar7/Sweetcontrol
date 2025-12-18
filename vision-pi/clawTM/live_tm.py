@@ -55,12 +55,12 @@ CORE_URL = os.environ.get(
 # Mapping from label -> numeric effect value sent to Core API.
 # Keep label strings in sync with labels.txt (order does not matter).
 VALUE_MAP = {
-    "insuline": -99,
-    "Cola": 82,
-    "Schoen": -47,
-    "Appel": 21,
-    "Donut": 50,  # New label - adjust value as needed
-    "gewicht": -30,  # New label - adjust value as needed
+    "insuline": -45,
+    "Cola": 35,
+    "Schoen": -19,
+    "Appel": 11,
+    "Donut": 21,  # New label - adjust value as needed
+    "gewicht": -12,  # New label - adjust value as needed
     # "Niks" deliberately has no numeric value
 }
 

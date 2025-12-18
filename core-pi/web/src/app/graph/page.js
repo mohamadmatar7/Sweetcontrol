@@ -10,7 +10,7 @@
  * ------------------------------------------------------------------
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import Pusher from 'pusher-js'; // Library for WebSocket connections (Soketi)
 import { Chewy, Caveat_Brush, Jersey_10 } from 'next/font/google'; // Custom Google Fonts
 
@@ -96,7 +96,11 @@ export default function ArcadePage() {
   const [sugarState, setSugarState] = useState(null);
   
   // State to store the history of data points for the graph
+  // Each point has: { t: timestamp, index: value, isCaughtItem: boolean }
   const [history, setHistory] = useState([]);
+  
+  // Ref to store caught item indices for the chart plugin to access
+  const caughtItemIndicesRef = useRef([]);
   
   // State to handle client-side rendering checks
   const [mounted, setMounted] = useState(false);
@@ -135,8 +139,8 @@ export default function ArcadePage() {
             const data = await res.json();
             if (data.ok && data.index != null) {
                 setSugarState(data);
-                // Initialize graph with the first point
-                setHistory([{ t: Date.now(), index: data.index }]);
+                // Initialize graph with the first point (not a caught item)
+                setHistory([{ t: Date.now(), index: data.index, isCaughtItem: false }]);
             }
         }
       } catch (err) { console.error("API Fetch Error:", err); }
@@ -172,11 +176,12 @@ export default function ArcadePage() {
           lastLabel: payload.lastLabel ?? null 
       });
 
-      // Update graph history (keep max 5 points for cleanliness)
+      // Update graph history (keep max 50 points to allow for random fluctuations)
+      // Mark this as a caught item since it came from a sugar-update event
       if (payload.index != null) {
         setHistory((prev) => {
-            const next = [...prev, { t: Date.now(), index: payload.index }];
-            return next.slice(-5); 
+            const next = [...prev, { t: Date.now(), index: payload.index, isCaughtItem: true }];
+            return next.slice(-50); // Keep more points to show the line smoothly
         });
       }
     });
@@ -186,6 +191,44 @@ export default function ArcadePage() {
         channel?.unbind_all(); 
         pusher?.disconnect(); 
     };
+  }, []);
+
+  // --- 3. RANDOM FLUCTUATION INTERVAL ---
+  // Adds a random 1-5 up or down fluctuation every 1 minute
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setHistory((prev) => {
+        if (prev.length === 0) return prev;
+        
+        // Get the last index value
+        const lastIndex = prev[prev.length - 1].index;
+        
+        // Generate random fluctuation: 1-5, randomly up or down
+        const fluctuation = Math.floor(Math.random() * 5) + 1; // 1-5
+        const direction = Math.random() < 0.5 ? -1 : 1; // Random up or down
+        const change = fluctuation * direction;
+        
+        // Clamp the new value between 50 and 250
+        const newIndex = Math.max(50, Math.min(250, lastIndex + change));
+        
+        // Add new point (not a caught item)
+        const next = [...prev, { t: Date.now(), index: newIndex, isCaughtItem: false }];
+        return next.slice(-50); // Keep max 50 points
+      });
+      
+      // Also update the sugarState to reflect the new value
+      setSugarState((prev) => {
+        if (!prev || prev.index == null) return prev;
+        const lastIndex = prev.index;
+        const fluctuation = Math.floor(Math.random() * 5) + 1;
+        const direction = Math.random() < 0.5 ? -1 : 1;
+        const change = fluctuation * direction;
+        const newIndex = Math.max(50, Math.min(250, lastIndex + change));
+        return { ...prev, index: newIndex };
+      });
+    }, 60000); // Every 1 minute (60000ms)
+
+    return () => clearInterval(interval);
   }, []);
 
   // --- VISUAL LOGIC ---
@@ -246,11 +289,16 @@ export default function ArcadePage() {
     },
 
     // Draw the Numeric Values above the points (Foreground layer)
+    // Only show values for caught items
     afterDatasetsDraw: (chart) => {
         const { ctx } = chart;
+        const caughtItemIndices = caughtItemIndicesRef.current;
         chart.data.datasets.forEach((dataset, i) => {
           const meta = chart.getDatasetMeta(i);
           meta.data.forEach((element, index) => {
+            // Only draw value if this is a caught item
+            if (!caughtItemIndices[index]) return;
+            
             const value = dataset.data[index];
             const { x, y } = element.tooltipPosition();
             
@@ -270,13 +318,23 @@ export default function ArcadePage() {
   };
 
   // --- CHART CONFIGURATION ---
+  // Track which indices are caught items for the plugin
+  const caughtItemIndices = history.map((p, idx) => p.isCaughtItem);
+  
+  // Update ref so plugin can access it
+  caughtItemIndicesRef.current = caughtItemIndices;
+  
   const chartData = {
     labels: history.map(() => ""), // Empty labels on X-axis
     datasets: [{
         data: history.map((p) => p.index),
         borderWidth: 6,
         tension: 0.4, // Smooth curve
-        pointRadius: 6,
+        // Only show points for caught items, hide others
+        pointRadius: (ctx) => {
+          const index = ctx.dataIndex;
+          return caughtItemIndices[index] ? 6 : 0; // Show point only if caught item
+        },
         pointBackgroundColor: THEME.bg, 
         pointBorderWidth: 3,
         pointHoverRadius: 8,
