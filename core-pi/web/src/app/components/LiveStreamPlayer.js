@@ -2,15 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 const DEFAULT_ROOM = process.env.NEXT_PUBLIC_LIVEKIT_ROOM || "sweet-control";
-const LIVEKIT_VIEW_URL =
-  process.env.NEXT_PUBLIC_LIVEKIT_VIEW_URL || "https://livekit.maxwyn.be/view.html";
-
 const VISIBILITY_TIMEOUT_MS = Number(
   process.env.NEXT_PUBLIC_LIVEKIT_VISIBILITY_TIMEOUT_MS ?? 60_000
 );
-
-// Zet deze op 1800000 (30 min) in .env.local als je dat wil
 const MAX_SESSION_MS = Number(
   process.env.NEXT_PUBLIC_LIVEKIT_MAX_SESSION_MS ?? 4 * 60 * 60 * 1000
 );
@@ -20,40 +16,121 @@ export default function LiveStreamPlayer({
   compact = false,
   className = "",
 }) {
-  const iframeRef = useRef(null);
+  const videoRef = useRef(null);
+  const roomRef = useRef(null);
+  const videoTrackRef = useRef(null);
 
-  const [status, setStatus] = useState("connecting"); // connecting | live | error | disconnected
+  const [status, setStatus] = useState("connecting"); // connecting | waiting | live | error | disconnected
   const [error, setError] = useState("");
   const [connecting, setConnecting] = useState(false);
-
-  // build iframe src (roomName currently not used by view.html, but future-proof)
-  const src = `${LIVEKIT_VIEW_URL}?room=${encodeURIComponent(roomName)}&t=${Date.now()}`;
+  const [hasVideoTrack, setHasVideoTrack] = useState(false);
 
   const cleanup = useCallback(() => {
-    // “Disconnect” by clearing iframe (stops network + stream)
-    if (iframeRef.current) {
+    if (videoTrackRef.current && videoRef.current) {
       try {
-        iframeRef.current.src = "about:blank";
+        videoTrackRef.current.detach(videoRef.current);
       } catch {}
     }
+    videoTrackRef.current = null;
+    setHasVideoTrack(false);
+
+    if (roomRef.current) {
+      try {
+        roomRef.current.disconnect();
+      } catch {}
+    }
+    roomRef.current = null;
   }, []);
 
   const connect = useCallback(async () => {
+    if (!API_BASE_URL) {
+      setStatus("error");
+      setError("NEXT_PUBLIC_API_BASE_URL ontbreekt.");
+      return;
+    }
+
     setConnecting(true);
     setError("");
     setStatus("connecting");
+    cleanup();
 
     try {
-      if (!iframeRef.current) throw new Error("iframe ontbreekt");
-      // reload iframe (forces a new token + connection inside view.html)
-      iframeRef.current.src = src;
-    } catch (e) {
+      const res = await fetch(
+        `${API_BASE_URL}/api/livekit/token?room=${encodeURIComponent(roomName)}`
+      );
+
+      if (!res.ok) {
+        let errorMsg = `Token endpoint gaf status ${res.status}`;
+        try {
+          const data = await res.json();
+          if (data?.error) errorMsg = data.error;
+        } catch {}
+        throw new Error(errorMsg);
+      }
+
+      const { url, token } = await res.json();
+      if (!url || !token) {
+        throw new Error("Ongeldige reactie van LiveKit token endpoint.");
+      }
+
+      const { Room, RoomEvent } = await import("livekit-client");
+      const room = new Room({
+        autoSubscribe: true,
+        adaptiveStream: true,
+        dynacast: true,
+      });
+
+      roomRef.current = room;
+
+      room.on(RoomEvent.TrackPublished, (publication) => {
+        if (publication.kind === "video") {
+          publication.setSubscribed(true);
+        }
+      });
+
+      room.on(RoomEvent.TrackSubscribed, (track) => {
+        if (track.kind === "video" && videoRef.current) {
+          if (videoTrackRef.current && videoTrackRef.current !== track) {
+            try {
+              videoTrackRef.current.detach(videoRef.current);
+            } catch {}
+          }
+
+          track.attach(videoRef.current);
+          videoTrackRef.current = track;
+          setHasVideoTrack(true);
+          setStatus("live");
+          videoRef.current.play().catch(() => {});
+        }
+      });
+
+      room.on(RoomEvent.TrackUnsubscribed, (track) => {
+        if (track.kind === "video" && videoTrackRef.current === track) {
+          try {
+            track.detach(videoRef.current);
+          } catch {}
+          videoTrackRef.current = null;
+          setHasVideoTrack(false);
+          setStatus("waiting");
+        }
+      });
+
+      room.on(RoomEvent.Disconnected, () => {
+        setHasVideoTrack(false);
+        setStatus("disconnected");
+      });
+
+      await room.connect(url, token);
+      setStatus("waiting");
+    } catch (err) {
+      console.error("LiveKit viewer error", err);
+      setError(err?.message || "Kon niet verbinden met LiveKit");
       setStatus("error");
-      setError(e?.message || "Kon stream niet starten");
+      cleanup();
     } finally {
       setConnecting(false);
     }
-  }, [src]);
+  }, [cleanup, roomName]);
 
   useEffect(() => {
     connect();
@@ -86,34 +163,40 @@ export default function LiveStreamPlayer({
         scheduleDisconnect();
       } else {
         clearScheduledDisconnect();
-        // Optionally reconnect when visible again:
-        // connect();
       }
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    // In case the page is already hidden when mounted
     handleVisibilityChange();
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       clearScheduledDisconnect();
     };
-  }, [cleanup /*, connect*/]);
+  }, [cleanup]);
 
   // Hard cap session length to avoid "overnight" viewers
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const timeoutId = window.setTimeout(() => {
-      cleanup();
-      setStatus("disconnected");
-    }, MAX_SESSION_MS);
+    const startedAt = Date.now();
+    const intervalId = window.setInterval(() => {
+      const elapsed = Date.now() - startedAt;
+      if (elapsed >= MAX_SESSION_MS) {
+        window.clearInterval(intervalId);
+        cleanup();
+        setStatus("disconnected");
+      }
+    }, 60_000); // check every minute
 
-    return () => window.clearTimeout(timeoutId);
+    return () => window.clearInterval(intervalId);
   }, [cleanup]);
 
   const statusLabel = (() => {
     if (status === "live") return "Live";
+    if (status === "waiting") return "Wachten op video";
     if (status === "disconnected") return "Verbinding verbroken";
     if (status === "error") return "Niet beschikbaar";
     return "Verbinding maken…";
@@ -173,34 +256,25 @@ export default function LiveStreamPlayer({
             Room: {roomName}
           </p>
         </div>
-
         <div className={`px-3 py-1 rounded-full text-[11px] font-semibold ${statusStyles}`}>
           {statusLabel}
         </div>
       </div>
 
       <div className="relative w-full aspect-[9/16] overflow-hidden rounded-xl bg-black border border-white/10 flex items-center justify-center">
-        {/* Viewer iframe */}
-        <iframe
-          ref={iframeRef}
-          title="Sweet Control Livestream"
-          src={src}
-          className="absolute inset-0 w-full h-full"
-          allow="autoplay; fullscreen; encrypted-media"
-          allowFullScreen
-          style={{ border: "0" }}
-          onLoad={() => {
-            // view.html will show a green dot when video is live;
-            // we treat iframe load as "connected"
-            setStatus("live");
-          }}
-          onError={() => {
-            setStatus("error");
-            setError("Kon view.html niet laden");
+        <video
+          ref={videoRef}
+          className="h-full object-contain"
+          muted
+          playsInline
+          autoPlay
+          style={{ 
+            backgroundColor: "#000",
+            transform: "rotate(-270deg) scale(0.56)",
+            maxWidth: "none"
           }}
         />
 
-        {/* Crosshair overlay (kept from your original component) */}
         <div
           className="pointer-events-none absolute left-[30%] top-[40%] -translate-x-1/2 -translate-y-1/2 z-10"
           aria-hidden="true"
@@ -209,7 +283,10 @@ export default function LiveStreamPlayer({
             className={`crosshair-rotate relative ${compact ? "h-16 w-16" : "h-20 w-20"}`}
           >
             <div className="crosshair-pulse absolute inset-0">
+              {/* Ring */}
               <div className="absolute inset-0 rounded-full border-[3px] border-[#4a39a3]" />
+
+              {/* 3 ticks on the edge (0°, 120°, 240°) */}
               {[0, 120, 240].map((deg) => (
                 <span
                   key={deg}
@@ -228,12 +305,12 @@ export default function LiveStreamPlayer({
           </div>
         </div>
 
-        {status !== "live" && (
+        {!hasVideoTrack && status !== "live" && (
           <div className="absolute inset-0 z-20 flex items-center justify-center text-white/80 text-sm bg-black/50 backdrop-blur-[1px]">
             {status === "error"
               ? "Stream niet beschikbaar"
-              : status === "disconnected"
-                ? "Verbinding verbroken"
+              : status === "waiting"
+                ? "Wachten op stream…"
                 : "Verbinden met stream…"}
           </div>
         )}
@@ -257,3 +334,4 @@ export default function LiveStreamPlayer({
     </div>
   );
 }
+
