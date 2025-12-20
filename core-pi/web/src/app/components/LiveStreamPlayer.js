@@ -4,34 +4,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 const DEFAULT_ROOM = process.env.NEXT_PUBLIC_LIVEKIT_ROOM || "sweet-control";
-const LIVEKIT_VIEWER_URL = process.env.NEXT_PUBLIC_LIVEKIT_VIEWER_URL;
 const VISIBILITY_TIMEOUT_MS = Number(
   process.env.NEXT_PUBLIC_LIVEKIT_VISIBILITY_TIMEOUT_MS ?? 60_000
 );
 const MAX_SESSION_MS = Number(
   process.env.NEXT_PUBLIC_LIVEKIT_MAX_SESSION_MS ?? 4 * 60 * 60 * 1000
 );
-
-function buildViewerSrc(viewerBaseUrl, { roomName, nonce }) {
-  if (!viewerBaseUrl) return "";
-  try {
-    const u = (() => {
-      try {
-        return new URL(viewerBaseUrl);
-      } catch {
-        // Support relative URLs in dev (client-only)
-        return new URL(viewerBaseUrl, window.location.origin);
-      }
-    })();
-
-    if (roomName) u.searchParams.set("room", roomName);
-    u.searchParams.set("embedded", "1");
-    u.searchParams.set("t", String(nonce ?? 0)); // cache-bust reloads
-    return u.toString();
-  } catch {
-    return viewerBaseUrl;
-  }
-}
 
 export default function LiveStreamPlayer({
   roomName = DEFAULT_ROOM,
@@ -46,13 +24,8 @@ export default function LiveStreamPlayer({
   const [error, setError] = useState("");
   const [connecting, setConnecting] = useState(false);
   const [hasVideoTrack, setHasVideoTrack] = useState(false);
-  const [viewerNonce, setViewerNonce] = useState(0);
-  const [embeddedEnabled, setEmbeddedEnabled] = useState(true);
-
-  const useEmbeddedViewer = Boolean(LIVEKIT_VIEWER_URL);
 
   const cleanup = useCallback(() => {
-    if (useEmbeddedViewer) return;
     if (videoTrackRef.current && videoRef.current) {
       try {
         videoTrackRef.current.detach(videoRef.current);
@@ -67,19 +40,9 @@ export default function LiveStreamPlayer({
       } catch {}
     }
     roomRef.current = null;
-  }, [useEmbeddedViewer]);
+  }, []);
 
   const connect = useCallback(async () => {
-    // New system: embed the dedicated LiveKit viewer page (no token minting here).
-    if (useEmbeddedViewer) {
-      setError("");
-      setConnecting(true);
-      setStatus("connecting");
-      setEmbeddedEnabled(true);
-      setViewerNonce((n) => n + 1);
-      return;
-    }
-
     if (!API_BASE_URL) {
       setStatus("error");
       setError("NEXT_PUBLIC_API_BASE_URL ontbreekt.");
@@ -167,7 +130,7 @@ export default function LiveStreamPlayer({
     } finally {
       setConnecting(false);
     }
-  }, [cleanup, roomName, useEmbeddedViewer]);
+  }, [cleanup, roomName]);
 
   useEffect(() => {
     connect();
@@ -184,7 +147,6 @@ export default function LiveStreamPlayer({
       if (visibilityTimeoutId != null) return;
       visibilityTimeoutId = window.setTimeout(() => {
         cleanup();
-        if (useEmbeddedViewer) setEmbeddedEnabled(false);
         setStatus("disconnected");
       }, VISIBILITY_TIMEOUT_MS);
     };
@@ -213,7 +175,7 @@ export default function LiveStreamPlayer({
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       clearScheduledDisconnect();
     };
-  }, [cleanup, useEmbeddedViewer]);
+  }, [cleanup]);
 
   // Hard cap session length to avoid "overnight" viewers
   useEffect(() => {
@@ -225,13 +187,12 @@ export default function LiveStreamPlayer({
       if (elapsed >= MAX_SESSION_MS) {
         window.clearInterval(intervalId);
         cleanup();
-        if (useEmbeddedViewer) setEmbeddedEnabled(false);
         setStatus("disconnected");
       }
     }, 60_000); // check every minute
 
     return () => window.clearInterval(intervalId);
-  }, [cleanup, useEmbeddedViewer]);
+  }, [cleanup]);
 
   const statusLabel = (() => {
     if (status === "live") return "Live";
@@ -301,42 +262,18 @@ export default function LiveStreamPlayer({
       </div>
 
       <div className="relative w-full aspect-[9/16] overflow-hidden rounded-xl bg-black border border-white/10 flex items-center justify-center">
-        {useEmbeddedViewer ? (
-          embeddedEnabled ? (
-            <iframe
-              key={viewerNonce}
-              title="LiveKit viewer"
-              className="absolute inset-0 h-full w-full"
-              src={buildViewerSrc(LIVEKIT_VIEWER_URL, {
-                roomName,
-                nonce: viewerNonce,
-              })}
-              allow="autoplay; fullscreen; microphone; camera; display-capture"
-              referrerPolicy="no-referrer-when-downgrade"
-              onLoad={() => {
-                setConnecting(false);
-                setStatus("live");
-              }}
-            />
-          ) : (
-            <div className="absolute inset-0 z-20 flex items-center justify-center text-white/80 text-sm bg-black/50 backdrop-blur-[1px]">
-              Verbinding verbroken
-            </div>
-          )
-        ) : (
-          <video
-            ref={videoRef}
-            className="h-full object-contain"
-            muted
-            playsInline
-            autoPlay
-            style={{
-              backgroundColor: "#000",
-              transform: "rotate(-270deg) scale(0.56)",
-              maxWidth: "none",
-            }}
-          />
-        )}
+        <video
+          ref={videoRef}
+          className="h-full object-contain"
+          muted
+          playsInline
+          autoPlay
+          style={{ 
+            backgroundColor: "#000",
+            transform: "rotate(-270deg) scale(0.56)",
+            maxWidth: "none"
+          }}
+        />
 
         <div
           className="pointer-events-none absolute left-[30%] top-[40%] -translate-x-1/2 -translate-y-1/2 z-10"
@@ -368,7 +305,7 @@ export default function LiveStreamPlayer({
           </div>
         </div>
 
-        {!useEmbeddedViewer && !hasVideoTrack && status !== "live" && (
+        {!hasVideoTrack && status !== "live" && (
           <div className="absolute inset-0 z-20 flex items-center justify-center text-white/80 text-sm bg-black/50 backdrop-blur-[1px]">
             {status === "error"
               ? "Stream niet beschikbaar"
