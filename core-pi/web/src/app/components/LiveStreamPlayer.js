@@ -4,21 +4,22 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 const DEFAULT_ROOM = process.env.NEXT_PUBLIC_LIVEKIT_ROOM || "sweet-control";
-const VISIBILITY_TIMEOUT_MS = Number(
-  process.env.NEXT_PUBLIC_LIVEKIT_VISIBILITY_TIMEOUT_MS ?? 60_000
-);
-const MAX_SESSION_MS = Number(
-  process.env.NEXT_PUBLIC_LIVEKIT_MAX_SESSION_MS ?? 4 * 60 * 60 * 1000
-);
 
 export default function LiveStreamPlayer({
   roomName = DEFAULT_ROOM,
   compact = false,
   className = "",
+  background = false, // Background-only mode (video only)
 }) {
   const videoRef = useRef(null);
   const roomRef = useRef(null);
   const videoTrackRef = useRef(null);
+  const recomputeBgScaleRef = useRef(() => {});
+  const BG_SCALE_BOOST = 1.13; // Small extra zoom to remove tiny borders after rotate
+
+  // Used only for background mode: we measure the container and scale after rotate
+  const containerRef = useRef(null);
+  const [bgScale, setBgScale] = useState(1);
 
   const [status, setStatus] = useState("connecting"); // connecting | waiting | live | error | disconnected
   const [error, setError] = useState("");
@@ -97,6 +98,7 @@ export default function LiveStreamPlayer({
           }
 
           track.attach(videoRef.current);
+          recomputeBgScaleRef.current?.();
           videoTrackRef.current = track;
           setHasVideoTrack(true);
           setStatus("live");
@@ -137,62 +139,51 @@ export default function LiveStreamPlayer({
     return () => cleanup();
   }, [connect, cleanup]);
 
-  // Auto-disconnect when tab has been hidden for a while
-  useEffect(() => {
-    if (typeof document === "undefined") return;
+  // Background mode: rotating 90deg swaps the effective width/height.
+  // This effect computes a scale factor so the rotated video still fills the container.
+useEffect(() => {
+  if (!background) return;
 
-    let visibilityTimeoutId = null;
+  const el = containerRef.current;
+  if (!el) return;
 
-    const scheduleDisconnect = () => {
-      if (visibilityTimeoutId != null) return;
-      visibilityTimeoutId = window.setTimeout(() => {
-        cleanup();
-        setStatus("disconnected");
-      }, VISIBILITY_TIMEOUT_MS);
-    };
+  const compute = () => {
+    const cw = el.clientWidth || 1;
+    const ch = el.clientHeight || 1;
 
-    const clearScheduledDisconnect = () => {
-      if (visibilityTimeoutId != null) {
-        window.clearTimeout(visibilityTimeoutId);
-        visibilityTimeoutId = null;
-      }
-    };
+    // For 90deg rotation, the rotated bounding box swaps (w,h).
+    // To still cover the container, scale must be >= max(ch/cw, cw/ch).
+    const s = Math.max(ch / cw, cw / ch);
 
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") {
-        scheduleDisconnect();
-      } else {
-        clearScheduledDisconnect();
-      }
-    };
+    setBgScale(s * BG_SCALE_BOOST);
+  };
 
-    document.addEventListener("visibilitychange", handleVisibilityChange);
+  // Run after layout so we don't measure before the cloud finishes sizing
+  const raf1 = requestAnimationFrame(() => {
+    const raf2 = requestAnimationFrame(compute);
+    // eslint-disable-next-line no-unused-vars
+    return raf2;
+  });
 
-    // In case the page is already hidden when mounted
-    handleVisibilityChange();
+  const ro = new ResizeObserver(compute);
+  ro.observe(el);
 
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      clearScheduledDisconnect();
-    };
-  }, [cleanup]);
+  window.addEventListener("resize", compute);
+  window.addEventListener("orientationchange", compute);
 
-  // Hard cap session length to avoid "overnight" viewers
-  useEffect(() => {
-    if (typeof window === "undefined") return;
+  // Allow manual recompute after track.attach()
+  recomputeBgScaleRef.current = () => compute();
 
-    const startedAt = Date.now();
-    const intervalId = window.setInterval(() => {
-      const elapsed = Date.now() - startedAt;
-      if (elapsed >= MAX_SESSION_MS) {
-        window.clearInterval(intervalId);
-        cleanup();
-        setStatus("disconnected");
-      }
-    }, 60_000); // check every minute
+  return () => {
+    cancelAnimationFrame(raf1);
+    ro.disconnect();
+    window.removeEventListener("resize", compute);
+    window.removeEventListener("orientationchange", compute);
+  };
+}, [background]);
 
-    return () => window.clearInterval(intervalId);
-  }, [cleanup]);
+
+
 
   const statusLabel = (() => {
     if (status === "live") return "Live";
@@ -208,6 +199,75 @@ export default function LiveStreamPlayer({
       : status === "error"
         ? "bg-red-500/10 text-red-300 border border-red-400/40"
         : "bg-white/5 text-white/80 border border-white/10";
+
+// Background-only mode: just render the video filling the container
+if (background) {
+  return (
+    <div className={`w-full h-full ${className}`}>
+      <div ref={containerRef} className="relative w-full h-full bg-black">
+
+        {/* VIDEO */}
+        <video
+          ref={videoRef}
+          className="absolute left-1/2 top-1/2"
+          muted
+          playsInline
+          autoPlay
+          style={{
+            backgroundColor: "#000",
+            width: "100%",
+            height: "100%",
+            maxWidth: "none",
+            maxHeight: "none",
+            objectFit: "contain",
+            transformOrigin: "center",
+            transform: `translate(-50%, -50%) rotate(-270deg) scale(${bgScale})`,
+          }}
+        />
+
+        {/* 🎯 CROSSHAIR / ARROW OVERLAY */}
+        <div
+          className="pointer-events-none absolute left-[30%] top-[40%] -translate-x-1/2 -translate-y-1/2 z-30"
+          aria-hidden="true"
+        >
+          <div className={`crosshair-rotate relative ${compact ? "h-16 w-16" : "h-20 w-20"}`}>
+            <div className="crosshair-pulse absolute inset-0">
+              <div className="absolute inset-0 rounded-full border-[3px] border-[#4a39a3]" />
+              {[0, 120, 240].map((deg) => (
+                <span
+                  key={deg}
+                  className="absolute left-1/2 top-1/2 block bg-[#4a39a3]"
+                  style={{
+                    width: "3px",
+                    height: compact ? "10px" : "12px",
+                    borderRadius: "2px",
+                    transform: `translate(-50%, -50%) rotate(${deg}deg) translateY(${
+                      compact ? "-30px" : "-38px"
+                    })`,
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* READABILITY OVERLAY (no blur) */}
+        <div className="absolute inset-0 z-10" />
+
+        {!hasVideoTrack && status !== "live" && (
+          <div className="absolute inset-0 z-40 flex items-center justify-center text-white/90 text-sm bg-black/55">
+            {status === "error"
+              ? "Stream niet beschikbaar"
+              : status === "waiting"
+                ? "Wachten op stream…"
+                : "Verbinden met stream..."}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 
   return (
     <div
@@ -252,11 +312,11 @@ export default function LiveStreamPlayer({
           <p className="text-[11px] uppercase tracking-[0.14em] text-white/60">
             Live top-down cam
           </p>
-          <p className="text-sm text-white/70 font-semibold">
-            Room: {roomName}
-          </p>
+          <p className="text-sm text-white/70 font-semibold">Room: {roomName}</p>
         </div>
-        <div className={`px-3 py-1 rounded-full text-[11px] font-semibold ${statusStyles}`}>
+        <div
+          className={`px-3 py-1 rounded-full text-[11px] font-semibold ${statusStyles}`}
+        >
           {statusLabel}
         </div>
       </div>
@@ -268,10 +328,10 @@ export default function LiveStreamPlayer({
           muted
           playsInline
           autoPlay
-          style={{ 
+          style={{
             backgroundColor: "#000",
             transform: "rotate(-270deg) scale(0.56)",
-            maxWidth: "none"
+            maxWidth: "none",
           }}
         />
 
@@ -279,14 +339,9 @@ export default function LiveStreamPlayer({
           className="pointer-events-none absolute left-[30%] top-[40%] -translate-x-1/2 -translate-y-1/2 z-10"
           aria-hidden="true"
         >
-          <div
-            className={`crosshair-rotate relative ${compact ? "h-16 w-16" : "h-20 w-20"}`}
-          >
+          <div className={`crosshair-rotate relative ${compact ? "h-16 w-16" : "h-20 w-20"}`}>
             <div className="crosshair-pulse absolute inset-0">
-              {/* Ring */}
               <div className="absolute inset-0 rounded-full border-[3px] border-[#4a39a3]" />
-
-              {/* 3 ticks on the edge (0°, 120°, 240°) */}
               {[0, 120, 240].map((deg) => (
                 <span
                   key={deg}
@@ -326,12 +381,9 @@ export default function LiveStreamPlayer({
         </button>
 
         {error && (
-          <span className="text-[12px] text-red-200 font-semibold">
-            {error}
-          </span>
+          <span className="text-[12px] text-red-200 font-semibold">{error}</span>
         )}
       </div>
     </div>
   );
 }
-
