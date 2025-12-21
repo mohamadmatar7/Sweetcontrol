@@ -42,7 +42,7 @@ export default function LiveStreamPlayer({
   // Background-only mode: iframe fills container + crosshair overlay stays on top
   if (background) {
     return (
-      <div className={`w-full h-full ${className}`}>
+      <div className={`scale-x-[1.18] w-full h-full ${className}`}>
         <div className="relative w-full h-full bg-black overflow-hidden">
           {/* STREAM (iframe) */}
           <iframe
@@ -90,7 +90,7 @@ export default function LiveStreamPlayer({
           `}</style>
 
           <div
-            className="pointer-events-none absolute left-[30%] top-[40%] -translate-x-1/2 -translate-y-1/2 z-30"
+            className="pointer-events-none absolute left-[30%] top-[40%] -translate-x-1/2 -translate-y-1/2 z-30 hidden"
             aria-hidden="true"
           >
             <div
