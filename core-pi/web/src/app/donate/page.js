@@ -6,14 +6,17 @@ import Footer from "../components/Footer";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
-export default function Donate() {
+export default function DonatePage() {
   const [name, setName] = useState("");
-  const [amountEuros, setAmountEuros] = useState(1);
+  const [amountEuros, setAmountEuros] = useState(3);
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showCustomInput, setShowCustomInput] = useState(false);
-  const [selectedAmount, setSelectedAmount] = useState(1);
+  const [selectedAmount, setSelectedAmount] = useState(3);
+
+  // voorwaarden checkbox
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   function toggleCustomInput() {
     setShowCustomInput(!showCustomInput);
@@ -61,6 +64,12 @@ export default function Donate() {
     const amount = Number(amountEuros);
     if (Number.isNaN(amount) || amount <= 0) {
       setError("Amount must be a positive number.");
+      return;
+    }
+
+    //  require checkbox
+    if (!acceptedTerms) {
+      setError("Je moet akkoord gaan met de algemene voorwaarden.");
       return;
     }
 
@@ -159,15 +168,6 @@ export default function Donate() {
                 ))}
               </div>
 
-              {/* CUSTOM AMOUNT TOGGLER */}
-              {/* <button
-                type="button"
-                className="w-full py-3 rounded-lg font-bold bg-[#7bb4ff] hover:bg-[#6da2e6] transition mb-4 text-white"
-                onClick={toggleCustomInput}
-              >
-                Ander bedrag...
-              </button> */}
-
               {/* CUSTOM AMOUNT INPUT */}
               {showCustomInput && (
                 <div className="flex items-center mb-5">
@@ -195,6 +195,28 @@ export default function Donate() {
                 </div>
               )}
 
+              {/* Terms checkbox */}
+              <label className="flex items-start gap-3 mt-1 mb-5 text-sm md:text-base text-[#141326]">
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4 accent-[#3f27ff]"
+                  checked={acceptedTerms}
+                  onChange={(e) => setAcceptedTerms(e.target.checked)}
+                />
+                <span className="leading-snug">
+                  Ik heb de{" "}
+                  <a
+                    href="/donatievoorwaarden.pdf?v=1"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline font-semibold hover:opacity-80"
+                  >
+                    algemene voorwaarden
+                  </a>{" "}
+                  gelezen en ik ga hiermee akkoord <span className="text-red-600">*</span>
+                </span>
+              </label>
+
               {/* ERROR MESSAGE */}
               {error && (
                 <div className="text-sm text-red-600 bg-red-50 border border-red-200 p-3 rounded-xl mb-5">
@@ -211,12 +233,26 @@ export default function Donate() {
                 {loading ? "Redirecting to payment..." : "Doneer"}
               </button>
 
-              <p className="mt-4 text-center text-[0.7rem] md:text-xs opacity-70 text-[#141326]">
-                * Maximaal aantal beurten bedraagt 5
+              <p className="my-4 text-center text-[0.7rem] md:text-xs opacity-70 text-[#141326] leading-relaxed">
+                Online spelen?{" "}
+                <a href="/livestream" target="_blank" rel="noreferrer" className="underline hover:opacity-100 font-semibold">
+                  Open de livestream
+                </a>
+                  <br />
+                Donaties worden niet terugbetaald.{" "}
+                <a
+                  href="/donatievoorwaarden.pdf"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline hover:opacity-100"
+                >
+                  Lees de voorwaarden
+                </a>
               </p>
             </form>
           </div>
         </Hippo>
+
         {/* FOOTER WITH LOGOS */}
         <Footer />
       </div>
