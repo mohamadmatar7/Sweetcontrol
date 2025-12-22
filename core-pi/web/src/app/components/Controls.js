@@ -182,7 +182,7 @@ export default function Controls({ token, onFirstAction, creditSeq }) {
       <button
         disabled={locked}
         aria-disabled={locked}
-        className="select-none w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-[#0b061f] border border-[#3b2a80] text-white text-xl sm:text-2xl font-semibold shadow-[0_8px_18px_rgba(0,0,0,0.75)] hover:border-[#facc15] hover:shadow-[0_0_20px_rgba(250,204,21,0.45)] active:translate-y-[2px] active:shadow-[0_3px_10px_rgba(0,0,0,0.8)] transition-all duration-100 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+        className="select-none w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-[#0b061f]/70 border border-[#3b2a80]/70 text-white/90 text-xl sm:text-2xl font-semibold shadow-[0_8px_18px_rgba(0,0,0,0.6)] hover:border-[#facc15] hover:shadow-[0_0_20px_rgba(250,204,21,0.35)] active:opacity-100 active:translate-y-[2px] active:shadow-[0_3px_10px_rgba(0,0,0,0.8)] transition-all duration-100 flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed"
         style={{ touchAction: 'none' }}
         onPointerDown={(e) => {
           if (locked) return;
@@ -230,7 +230,7 @@ export default function Controls({ token, onFirstAction, creditSeq }) {
       onContextMenu={(e) => e.preventDefault()}
     >
       <div className="w-full mt-3">
-        <div className="flex flex-col items-center gap-5">
+        <div className="flex flex-col items-center gap-3 sm:gap-4">
           {/* Up */}
           <HoldButton direction="up">
             <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
@@ -239,7 +239,7 @@ export default function Controls({ token, onFirstAction, creditSeq }) {
           </HoldButton>
 
           {/* Middle row: left / grab / right */}
-          <div className="flex items-center justify-center gap-5">
+          <div className="flex items-center justify-center gap-3 sm:gap-4">
             <HoldButton direction="left">
               <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M4 12l8-7v14z" />
@@ -249,7 +249,7 @@ export default function Controls({ token, onFirstAction, creditSeq }) {
             <button
               disabled={locked || grabUsedRef.current}
               aria-disabled={locked || grabUsedRef.current}
-              className="select-none w-20 h-20 rounded-full bg-gradient-to-br from-[#ffbb00] to-[#ff3b1f] text-[#1b123a] font-extrabold text-sm sm:text-base shadow-[0_0_32px_rgba(251,191,36,0.95)] border border-amber-300 active:scale-95 disabled:opacity-50 disabled:shadow-none disabled:cursor-not-allowed transition-transform duration-75 flex items-center justify-center tracking-wide"
+              className="select-none w-20 h-20 rounded-full bg-gradient-to-br from-[#ffbb00]/80 to-[#ff3b1f]/80 text-[#1b123a] font-extrabold text-sm sm:text-base shadow-[0_0_24px_rgba(251,191,36,0.7)] border border-amber-300/80 active:scale-95 active:opacity-100 disabled:opacity-40 disabled:shadow-none disabled:cursor-not-allowed transition-all duration-75 flex items-center justify-center tracking-wide"
               onClick={grab}
             >
               GRAB
@@ -269,9 +269,9 @@ export default function Controls({ token, onFirstAction, creditSeq }) {
             </svg>
           </HoldButton>
 
-          <p className="text-[0.7rem] sm:text-xs text-slate-600 text-center max-w-xs">
+          {/* <p className="text-[0.7rem] sm:text-xs text-white text-center max-w-xs">
             Houd de pijltjes ingedrukt om de grijparm te bewegen en tik op <b>GRAB</b> om te grijpen.
-          </p>
+          </p> */}
         </div>
       </div>
     </div>
