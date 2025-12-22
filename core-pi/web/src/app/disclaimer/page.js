@@ -105,8 +105,23 @@ export default function Disclaimer() {
             </div>
           </section>
 
+          {/* PDF link */}
+          <div className="text-center mx-2 sm:mx-0">
+            <a
+              href="/donatievoorwaarden.pdf"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-block w-full sm:w-auto sm:min-w-[260px] sm:px-10 px-6 py-3 rounded-lg bg-white/10 hover:bg-white/15 transition text-white font-bold"
+            >
+              Bekijk de volledige voorwaarden (PDF)
+            </a>
+            <p className="mt-2 text-center text-[0.7rem] md:text-xs opacity-70 text-white">
+              Opent in een nieuw tabblad
+            </p>
+          </div>
+
           {/* Link to doneren */}
-          <div className="text-center mt-4 mx-4 sm:mx-0">
+          <div className="text-center mt-2 mx-2 sm:mx-0">
             <Link
               href="/donate"
               className="inline-block w-full sm:w-auto sm:min-w-[260px] sm:px-10 p-3 md:p-4 rounded-lg bg-gradient-to-r from-[#ffbb00] to-[#ff3b1f] hover:opacity-90 transition active:scale-95 mb-2 md:mb-6 text-white font-black text-lg md:text-xl"
