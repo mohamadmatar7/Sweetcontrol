@@ -6,6 +6,7 @@ import Pusher from "pusher-js";
 import Controls from "./../components/Controls";
 import Hippo from "../components/Hippo";
 import Footer from "../components/Footer";
+import LiveStreamPlayer from "../components/LiveStreamPlayer";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -113,12 +114,9 @@ export default function ArcadePage() {
     const poll = setInterval(async () => {
       try {
         // Queue snapshot
-        const qRes = await fetch(
-          `${API_BASE_URL}/api/queue?t=${Date.now()}`,
-          {
-            cache: "no-store",
-          }
-        );
+        const qRes = await fetch(`${API_BASE_URL}/api/queue?t=${Date.now()}`, {
+          cache: "no-store",
+        });
         if (qRes.ok) {
           const qData = await qRes.json();
           setQueue(qData.queue || []);
@@ -198,12 +196,9 @@ export default function ArcadePage() {
 
     async function loadInitial() {
       // 1) Load queue snapshot first
-      const qRes = await fetch(
-        `${API_BASE_URL}/api/queue?t=${Date.now()}`,
-        {
-          cache: "no-store",
-        }
-      );
+      const qRes = await fetch(`${API_BASE_URL}/api/queue?t=${Date.now()}`, {
+        cache: "no-store",
+      });
       const qData = await qRes.json();
 
       setQueue(qData.queue || []);
@@ -517,35 +512,45 @@ export default function ArcadePage() {
     );
   }
 
-  // State when ACTIVE
-  return (
-    <main className="min-h-screen bg-gradient-to-br from-[#5a3ffb] to-[#2c0f74] text-slate-100 flex justify-center p-2">
-      <div className="w-full max-w-3xl flex flex-col items-center justify-center">
-        <Hippo>
-          {/* CLOUD-LIKE ACTIVE PANEL INSIDE HIPPO */}
-          <div className="relative w-full mt-6 md:mt-8">
-            <div className="relative bg-gradient-to-br from-white to-white/90 rounded-[2.5rem] shadow-lg px-3 py-7 md:px-8 md:py-9 border border-white/70 text-[#141326]">
+// State when ACTIVE
+return (
+  <main className="min-h-screen bg-gradient-to-br from-[#5a3ffb] to-[#2c0f74] text-slate-100 flex justify-center p-2">
+    <div className="w-full max-w-3xl flex flex-col items-center justify-center">
+      <Hippo>
+        {/* CLOUD-LIKE ACTIVE PANEL INSIDE HIPPO */}
+        <div className="relative w-full mt-6 md:mt-8">
+          {/* More "open" theme: lighter cloud */}
+          <div className="relative rounded-[2.5rem] shadow-lg px-3 py-7 md:px-8 md:py-9 border border-white/70 text-[#141326] overflow-hidden bg-white/35">
+            {/* Background livestream video (fills full cloud) */}
+            <div className="absolute inset-0 z-0">
+              <LiveStreamPlayer background className="w-full h-full" />
+              {/* Very light overlay (no blur) to keep text readable */}
+              <div className="absolute inset-0 bg-black/5" />
+            </div>
+
+            {/* Foreground content */}
+            <div className="relative z-10">
               {/* Header / status */}
               <div className="text-center mb-3">
-                <p className="text-xs sm:text-sm text-yellow-700/80 uppercase tracking-[0.16em]">
+                <p className="text-xs sm:text-sm text-white uppercase tracking-[0.16em] drop-shadow-[0_2px_8px_rgba(255,255,255,0.95)]">
                   jouw beurt
                 </p>
-                <p className="text-xs sm:text-sm text-slate-700">
+                <p className="text-xs sm:text-sm text-white drop-shadow-[0_2px_8px_rgba(255,255,255,0.95)]">
                   Credits over: <b>{me.creditsRemaining}</b>
                 </p>
+
                 {timerRunning && (
-                  <p className="text-[0.7rem] sm:text-xs text-slate-500 mt-2">
+                  <p className="text-[0.7rem] sm:text-xs text-white mt-2 drop-shadow-[0_2px_8px_rgba(255,255,255,0.95)]">
                     Tijd over deze beurt: <b>{secondsLeft}s</b>
                   </p>
                 )}
 
                 {!timerRunning && (
-                  <p className="text-[0.7rem] sm:text-xs text-slate-500 mt-2">
+                  <p className="text-[0.7rem] sm:text-xs text-white mt-2 drop-shadow-[0_2px_8px_rgba(255,255,255,0.95)]">
                     {firstMoveSecondsLeft !== null && (
                       <>
                         {" "}
-                        Maak je eerste beweging in{" "}
-                        <b>{firstMoveSecondsLeft}s</b>
+                        Maak je eerste beweging in <b>{firstMoveSecondsLeft}s</b>
                       </>
                     )}
                   </p>
@@ -553,40 +558,42 @@ export default function ArcadePage() {
               </div>
 
               {/* CONTROLS INSIDE CLOUD */}
-              <div className="w-full max-w-md mx-auto">
+              {/* Push controls down a bit so they are not centered in the stream */}
+              <div className="w-full max-w-md mx-auto mt-[7.5rem] sm:mt-16 mb-6 opacity-95">
                 <Controls
                   token={token}
                   creditSeq={creditSeq}
                   onFirstAction={() => {
                     // Optimistic local UX start (server will resync anyway)
                     if (!timerRunning && !endsAtRef.current) {
-                      startTimerWithEndsAt(
-                        Date.now() + CREDIT_SECONDS * 1000
-                      );
+                      startTimerWithEndsAt(Date.now() + CREDIT_SECONDS * 1000);
                     }
                   }}
                 />
               </div>
             </div>
           </div>
+        </div>
 
-          {/* NOTICE UNDER CLOUD (IF ANY) */}
-          {notice && (
-            <div
-              className={`mt-4 rounded-xl px-4 py-2 text-xs sm:text-sm font-semibold text-center
-                ${
-                  notice.type === "error"
-                    ? "bg-red-600/10 border border-red-400/70 text-red-600"
-                    : "bg-[#272153]/10 border border-[#3b347c] text-[#272153]"
-                }`}
-            >
-              {notice.text}
-            </div>
-          )}
-        </Hippo>
-        {/* FOOTER WITH LOGOS */}
-        <Footer />
-      </div>
-    </main>
-  );
+        {/* NOTICE UNDER CLOUD (IF ANY) */}
+        {notice && (
+          <div
+            className={`mt-4 rounded-xl px-4 py-2 text-xs sm:text-sm font-semibold text-center
+              ${
+                notice.type === "error"
+                  ? "bg-red-600/10 border border-red-400/70 text-red-600"
+                  : "bg-[#272153]/10 border border-[#3b347c] text-[#272153]"
+              }`}
+          >
+            {notice.text}
+          </div>
+        )}
+      </Hippo>
+
+      {/* FOOTER WITH LOGOS */}
+      <Footer />
+    </div>
+  </main>
+);
+
 }
