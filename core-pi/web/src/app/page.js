@@ -9,7 +9,7 @@ import Pusher from "pusher-js";
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 export default function Homepage() {
-  const [totalEur, setTotalEur] = useState(null);
+  const [totalPlayed, setTotalPlayed] = useState(null);
 
   useEffect(() => {
     if (!API_BASE_URL) return;
@@ -18,7 +18,7 @@ export default function Homepage() {
     fetch(`${API_BASE_URL}/api/stats/mollie-total`)
       .then((r) => r.json())
       .then((d) => {
-        if (d?.ok) setTotalEur(d.totalEur);
+        if (d?.ok) setTotalPlayed(Math.floor(Number(d.totalEur ?? 0)));
       })
       .catch(() => {});
 
@@ -49,10 +49,10 @@ export default function Homepage() {
       <div className="flex-1 flex flex-col items-center justify-center w-full">
         <Hippo title="Sweet Control">
           {/* REALTIME DONATION TOTAL */}
-          {totalEur !== null && (
+          {totalPlayed !== null && (
             <div className="mb-2 text-center">
               <div className="inline-flex items-center px-4 py-1.5 rounded-lg bg-white/90 text-[#2c0f74] text-sm font-semibold shadow-sm">
-                💛 Ingezameld: € {totalEur.toFixed(2)}
+                Aantal keer gespeeld: {totalPlayed}
               </div>
             </div>
           )}
@@ -62,26 +62,25 @@ export default function Homepage() {
             {/* 1) Diabetes -> Warmste Week */}
             <Link href="/warmste-week" className="flex items-stretch w-full">
               <div className="w-full py-3 md:py-4 rounded-lg bg-[#7bb4ff] hover:bg-[#6da2e6] hover:opacity-90 transition disabled:opacity-60 active:scale-95 text-white font-black text-lg md:text-xl flex items-center justify-center gap-2">
-                <span>📖</span>
                 <span>Ontdek het verhaal</span>
               </div>
             </Link>
 
-            {/* Livestream & remote play */}
-            <Link href="/livestream" className="flex items-stretch w-full">
-              <div className="w-full py-3 md:py-4 rounded-lg bg-[#0b0b1c]/80 border border-white/20 hover:opacity-90 transition disabled:opacity-60 active:scale-95 text-white font-black text-lg md:text-xl flex items-center justify-center gap-2">
-                <span>🎥</span>
-                <span>Speel live van thuis</span>
+            {/* 2) Doneer & speel fysiek */}
+            <Link href="/donate" className="flex items-stretch w-full">
+              <div className="w-full py-3 md:py-4 rounded-lg bg-gradient-to-r from-[#ffbb00] to-[#ff3b1f] hover:opacity-90 transition disabled:opacity-60 active:scale-95 text-white font-black text-lg md:text-xl flex items-center justify-center gap-2">
+                <span>Doneer &amp; speel</span>
               </div>
             </Link>
 
-            {/* 2) Doneer & speel meteen */}
-            <Link href="/donate" className="flex items-stretch w-full">
-              <div className="w-full py-3 md:py-4 rounded-lg bg-gradient-to-r from-[#ffbb00] to-[#ff3b1f] hover:opacity-90 transition disabled:opacity-60 active:scale-95 mb-4 sm:mb-7 text-white font-black text-lg md:text-xl flex items-center justify-center gap-2">
-                <span>💝</span>
-                <span>Doneer &amp; speel meteen</span>
+            {/* 3) Livestream */}
+            <Link href="/livestream" target="_blank" rel="noreferrer" className="flex items-stretch w-full">
+              <div className="w-full py-3 md:py-4 rounded-lg bg-white/90 hover:opacity-90 transition disabled:opacity-60 active:scale-95 text-[#2c0f74] font-black text-lg md:text-xl flex items-center justify-center gap-2 shadow-sm mb-4 sm:mb-7">
+                <span>Open livestream</span>
               </div>
             </Link>
+
+
           </div>
         </Hippo>
       </div>
