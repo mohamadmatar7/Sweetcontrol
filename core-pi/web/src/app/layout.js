@@ -1,4 +1,4 @@
-import { Caveat_Brush, Jersey_10 } from "next/font/google";
+import { Caveat_Brush, Jersey_10, Chewy } from "next/font/google";
 import "./globals.css";
 
 export const caveatBrush = Caveat_Brush({
@@ -11,6 +11,12 @@ export const jersey_10 = Jersey_10({
   subsets: ["latin"],
   weight: "400",
   variable: "--font-jersey-10",
+});
+
+export const chewy = Chewy({
+  subsets: ["latin"],
+  weight: "400",
+  variable: "--font-chewy",
 });
 
 export const metadata = {
