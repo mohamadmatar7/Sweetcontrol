@@ -241,10 +241,10 @@ export default function AdminPage() {
     // Poll every 2 seconds
     if (pollRef.current) clearInterval(pollRef.current);
     if (autoRefresh) {
-      pollRef.current = setInterval(function () {
-        // Avoid noisy errors while typing token etc.
-        refresh(true);
-      }, 2000);
+    pollRef.current = setInterval(function () {
+      // Avoid noisy errors while typing token etc.
+      refresh(true);
+    }, 2000);
     }
 
     // Also refresh on focus/visibility
@@ -757,7 +757,7 @@ export default function AdminPage() {
                   { className: "overflow-x-auto -mx-4 px-4" },
                   h(
                     "div",
-                    { className: "flex items-end gap-3 h-56 relative pt-8 min-w-max" },
+                    { className: "flex items-end gap-3 h-56 relative pt-8 pb-6 min-w-max" },
                     chartData.map(function (day, idx) {
                     var maxPayers = Math.max.apply(Math, chartData.map(function (d) { return d.payers; }));
                     var maxMoney = Math.max.apply(Math, chartData.map(function (d) { return d.money; }));
@@ -770,12 +770,12 @@ export default function AdminPage() {
                     var dateObj = new Date(day.date);
                     var dateStr = dateObj.toLocaleDateString("en-US", { month: "short", day: "numeric" });
                     
-                    return h(
-                      "div",
-                      {
-                        key: idx,
+                  return h(
+                    "div",
+                    {
+                      key: idx,
                         className: "flex flex-col justify-end items-center h-full relative group",
-                        style: { minWidth: "60px" },
+                        style: { minWidth: "60px", flex: "1 1 0" },
                       },
                       // Date label at the bottom
                       h(
@@ -839,12 +839,12 @@ export default function AdminPage() {
                               className: "w-full bg-gradient-to-t from-blue-500 to-blue-300 rounded-t hover:from-blue-400 hover:to-blue-200 transition-colors",
                               style: { height: payerHeight + "%", minHeight: payerHeight > 0 ? "4px" : "0" },
                               title: day.date + ": " + day.payers + " payers",
-                            }
+                    }
                           )
                         )
                       )
-                    );
-                  })
+                  );
+                })
                   )
                 ),
                 h(
@@ -1023,7 +1023,7 @@ export default function AdminPage() {
             h(
               "div",
               { className: "text-xs text-white/60" },
-              "Auto-updating every 2s. Click any row to select it on the right."
+            "Auto-updating every 2s. Click any row to select it on the right."
             ),
             totalPages > 1 ? h(
               "div",
