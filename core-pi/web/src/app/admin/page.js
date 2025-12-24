@@ -754,8 +754,11 @@ export default function AdminPage() {
                 { className: "space-y-4" },
                 h(
                   "div",
-                  { className: "flex items-end gap-1 h-56 relative pt-8" },
-                  chartData.map(function (day, idx) {
+                  { className: "overflow-x-auto -mx-4 px-4" },
+                  h(
+                    "div",
+                    { className: "flex items-end gap-3 h-56 relative pt-8 min-w-max" },
+                    chartData.map(function (day, idx) {
                     var maxPayers = Math.max.apply(Math, chartData.map(function (d) { return d.payers; }));
                     var maxMoney = Math.max.apply(Math, chartData.map(function (d) { return d.money; }));
                     var globalMax = Math.max(maxPayers, maxMoney);
@@ -771,7 +774,8 @@ export default function AdminPage() {
                       "div",
                       {
                         key: idx,
-                        className: "flex-1 flex flex-col justify-end items-center h-full relative group",
+                        className: "flex flex-col justify-end items-center h-full relative group",
+                        style: { minWidth: "60px" },
                       },
                       // Date label at the bottom
                       h(
@@ -792,7 +796,8 @@ export default function AdminPage() {
                         h(
                           "div",
                           {
-                            className: "flex flex-col justify-end items-center h-full flex-1",
+                            className: "flex flex-col justify-end items-center h-full flex-1 min-w-0",
+                            style: { width: "50%" },
                           },
                           // Label
                           day.money > 0 ? h(
@@ -816,7 +821,8 @@ export default function AdminPage() {
                         h(
                           "div",
                           {
-                            className: "flex flex-col justify-end items-center h-full flex-1",
+                            className: "flex flex-col justify-end items-center h-full flex-1 min-w-0",
+                            style: { width: "50%" },
                           },
                           // Label
                           day.payers > 0 ? h(
@@ -839,10 +845,11 @@ export default function AdminPage() {
                       )
                     );
                   })
+                  )
                 ),
                 h(
                   "div",
-                  { className: "flex justify-center gap-6 text-xs text-white/60 mt-2" },
+                  { className: "flex justify-center gap-6 text-xs text-white/60 mt-8" },
                   h(
                     "div",
                     { className: "flex items-center gap-2" },
