@@ -122,9 +122,12 @@ export default function AdminPage() {
   const [creditsTotal, setCreditsTotal] = useState(1);
   const [creditsUsed, setCreditsUsed] = useState(0);
   const [status, setStatus] = useState("waiting");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
 
   const pollRef = useRef(null);
   const refreshingRef = useRef(false);
+  const scrollPositionRef = useRef(0);
 
   // Load token from localStorage / URL param
   useEffect(() => {
@@ -181,6 +184,9 @@ export default function AdminPage() {
     if (refreshingRef.current) return;
     refreshingRef.current = true;
 
+    // Save scroll position before refresh
+    scrollPositionRef.current = window.scrollY || document.documentElement.scrollTop;
+
     if (!silent) {
       setError("");
       setNotice("");
@@ -214,6 +220,13 @@ export default function AdminPage() {
     } finally {
       if (!silent) setLoading(false);
       refreshingRef.current = false;
+      
+      // Restore scroll position after refresh (only for silent refreshes to avoid jumping)
+      if (silent && scrollPositionRef.current > 0) {
+        requestAnimationFrame(function () {
+          window.scrollTo(0, scrollPositionRef.current);
+        });
+      }
     }
   }
 
@@ -294,6 +307,54 @@ export default function AdminPage() {
     },
     [donations, selectedId]
   );
+
+  // Calculate daily money totals from donations array
+  var dailyMoneyData = useMemo(
+    function () {
+      var dailyTotals = {};
+      donations.forEach(function (d) {
+        if (d.status === "done" && d.amountEuros !== null && d.amountEuros !== undefined && d.amountEuros > 0) {
+          var date = d.createdAt ? new Date(d.createdAt).toISOString().split("T")[0] : null;
+          if (date) {
+            if (!dailyTotals[date]) {
+              dailyTotals[date] = 0;
+            }
+            dailyTotals[date] += Number(d.amountEuros || 0);
+          }
+        }
+      });
+      return dailyTotals;
+    },
+    [donations]
+  );
+
+  // Combine gamesOverTime with daily money data
+  var chartData = useMemo(
+    function () {
+      if (!stats || !stats.gamesOverTime) return [];
+      return stats.gamesOverTime.map(function (day) {
+        return {
+          date: day.date,
+          payers: day.donations || 0,
+          money: dailyMoneyData[day.date] || 0,
+        };
+      });
+    },
+    [stats, dailyMoneyData]
+  );
+
+  // Pagination calculations
+  var totalPages = Math.ceil(donations.length / itemsPerPage);
+  var startIndex = (currentPage - 1) * itemsPerPage;
+  var endIndex = startIndex + itemsPerPage;
+  var paginatedDonations = donations.slice(startIndex, endIndex);
+
+  // Reset to page 1 when donations change significantly
+  useEffect(function () {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(1);
+    }
+  }, [donations.length, currentPage, totalPages]);
 
   // Actions
   async function runAction(label, fn, idForBusy) {
@@ -673,23 +734,112 @@ export default function AdminPage() {
           "div",
           { className: "bg-white/5 border border-white/10 rounded-2xl p-4" },
           h("div", { className: "text-xs uppercase tracking-[0.18em] text-white/60 mb-3" }, "Completed Donations Over Time"),
-          stats.gamesOverTime && stats.gamesOverTime.length > 0
+          chartData && chartData.length > 0
             ? h(
                 "div",
-                { className: "flex items-end gap-1 h-32" },
-                stats.gamesOverTime.map(function (day, idx) {
-                  var maxDonations = Math.max.apply(Math, stats.gamesOverTime.map(function (d) { return d.donations; }));
-                  var height = maxDonations > 0 ? (day.donations / maxDonations) * 100 : 0;
-                  return h(
+                { className: "space-y-4" },
+                h(
+                  "div",
+                  { className: "flex items-end gap-1 h-56 relative pt-8" },
+                  chartData.map(function (day, idx) {
+                    var maxPayers = Math.max.apply(Math, chartData.map(function (d) { return d.payers; }));
+                    var maxMoney = Math.max.apply(Math, chartData.map(function (d) { return d.money; }));
+                    var maxValue = Math.max(maxPayers, maxMoney);
+                    
+                    var payerHeight = maxPayers > 0 ? (day.payers / maxPayers) * 100 : 0;
+                    var moneyHeight = maxMoney > 0 ? (day.money / maxMoney) * 100 : 0;
+                    
+                    // Format date for display
+                    var dateObj = new Date(day.date);
+                    var dateStr = dateObj.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                    
+                    return h(
+                      "div",
+                      {
+                        key: idx,
+                        className: "flex-1 flex flex-col items-center gap-1 relative",
+                      },
+                      // Amount labels at the top
+                      h(
+                        "div",
+                        {
+                          className: "absolute -top-8 left-1/2 transform -translate-x-1/2 flex flex-col items-center gap-0.5 w-full",
+                        },
+                        day.money > 0 ? h(
+                          "div",
+                          {
+                            className: "text-[10px] text-emerald-300 font-semibold whitespace-nowrap",
+                          },
+                          "€" + day.money.toFixed(2)
+                        ) : null,
+                        day.payers > 0 ? h(
+                          "div",
+                          {
+                            className: "text-[10px] text-blue-300 font-semibold whitespace-nowrap",
+                          },
+                          day.payers
+                        ) : null
+                      ),
+                      // Money bar (green)
+                      h(
+                        "div",
+                        {
+                          className: "w-full relative",
+                          style: { minHeight: "4px" },
+                        },
+                        h(
+                          "div",
+                          {
+                            className: "w-full bg-gradient-to-t from-emerald-500 to-emerald-300 rounded-t hover:from-emerald-400 hover:to-emerald-200 transition-colors",
+                            style: { height: moneyHeight + "%", minHeight: moneyHeight > 0 ? "4px" : "0" },
+                            title: day.date + ": €" + day.money.toFixed(2) + " (" + day.payers + " payers)",
+                          }
+                        )
+                      ),
+                      // Payers bar (blue)
+                      h(
+                        "div",
+                        {
+                          className: "w-full relative",
+                          style: { minHeight: "4px" },
+                        },
+                        h(
+                          "div",
+                          {
+                            className: "w-full bg-gradient-to-t from-blue-500 to-blue-300 rounded-t hover:from-blue-400 hover:to-blue-200 transition-colors",
+                            style: { height: payerHeight + "%", minHeight: payerHeight > 0 ? "4px" : "0" },
+                            title: day.date + ": " + day.payers + " payers (€" + day.money.toFixed(2) + ")",
+                          }
+                        )
+                      ),
+                      // Date label
+                      h(
+                        "div",
+                        {
+                          className: "text-[10px] text-white/60 mt-1 text-center",
+                          style: { writingMode: "horizontal-tb" },
+                        },
+                        dateStr
+                      )
+                    );
+                  })
+                ),
+                h(
+                  "div",
+                  { className: "flex justify-center gap-6 text-xs text-white/60 mt-2" },
+                  h(
                     "div",
-                    {
-                      key: idx,
-                      className: "flex-1 bg-gradient-to-t from-emerald-500 to-emerald-300 rounded-t min-h-[4px] hover:from-emerald-400 hover:to-emerald-200 transition-colors",
-                      style: { height: height + "%" },
-                      title: day.date + ": " + day.donations + " donations (" + day.plays + " plays)",
-                    }
-                  );
-                })
+                    { className: "flex items-center gap-2" },
+                    h("div", { className: "w-3 h-3 bg-emerald-400 rounded" }, null),
+                    h("span", null, "Money (€)")
+                  ),
+                  h(
+                    "div",
+                    { className: "flex items-center gap-2" },
+                    h("div", { className: "w-3 h-3 bg-blue-400 rounded" }, null),
+                    h("span", null, "Payers")
+                  )
+                )
               )
             : h("div", { className: "text-sm text-white/60 py-8 text-center" }, "No data yet")
         )
@@ -754,7 +904,7 @@ export default function AdminPage() {
               h(
                 "tbody",
                 null,
-                donations.length === 0
+                paginatedDonations.length === 0
                   ? h(
                       "tr",
                       null,
@@ -767,7 +917,7 @@ export default function AdminPage() {
                         "No donations."
                       )
                     )
-                  : donations.map(function (d) {
+                  : paginatedDonations.map(function (d) {
                       var isSelected = String(selectedId) === String(d.id);
                       var isActiveRow =
                         Number(activeDonationId) === Number(d.id) || d.status === "active";
@@ -788,7 +938,7 @@ export default function AdminPage() {
                             isSelected ? "!bg-purple-500/20 ring-2 ring-purple-400/40" : "",
                             isActiveRow ? "ring-2 ring-blue-400/40" : ""
                           ),
-                          onClick: function () {
+                          onClick: function (e) {
                             pickId(d.id);
                           },
                           style: { cursor: "pointer" },
@@ -846,8 +996,45 @@ export default function AdminPage() {
 
           h(
             "div",
-            { className: "mt-3 text-xs text-white/60" },
-            "Auto-updating every 2s. Click any row to select it on the right."
+            { className: "mt-3 flex flex-col sm:flex-row items-center justify-between gap-3" },
+            h(
+              "div",
+              { className: "text-xs text-white/60" },
+              "Auto-updating every 2s. Click any row to select it on the right."
+            ),
+            totalPages > 1 ? h(
+              "div",
+              { className: "flex items-center gap-2" },
+              h(
+                Button,
+                {
+                  variant: "dark",
+                  disabled: currentPage === 1,
+                  onClick: function () {
+                    setCurrentPage(function (p) { return Math.max(1, p - 1); });
+                  },
+                  className: "px-2 py-1 text-xs",
+                },
+                "← Prev"
+              ),
+              h(
+                "div",
+                { className: "text-xs text-white/70 px-2" },
+                "Page " + currentPage + " of " + totalPages
+              ),
+              h(
+                Button,
+                {
+                  variant: "dark",
+                  disabled: currentPage >= totalPages,
+                  onClick: function () {
+                    setCurrentPage(function (p) { return Math.min(totalPages, p + 1); });
+                  },
+                  className: "px-2 py-1 text-xs",
+                },
+                "Next →"
+              )
+            ) : null
           )
         ),
 
