@@ -771,13 +771,13 @@ export default function AdminPage() {
                       h(
                         "div",
                         {
-                          className: "flex items-end justify-center gap-1 h-full w-full px-1",
+                          className: "flex items-end justify-center gap-1.5 h-full w-full px-1.5",
                         },
                         // Money Bar Column
                         h(
                           "div",
                           {
-                            className: "flex flex-col justify-end items-center h-full w-full max-w-[16px]",
+                            className: "flex flex-col justify-end items-center h-full w-full max-w-[20px]",
                           },
                           // Label
                           day.money > 0 ? h(
@@ -801,7 +801,7 @@ export default function AdminPage() {
                         h(
                           "div",
                           {
-                            className: "flex flex-col justify-end items-center h-full w-full max-w-[16px]",
+                            className: "flex flex-col justify-end items-center h-full w-full max-w-[20px]",
                           },
                           // Label
                           day.payers > 0 ? h(
