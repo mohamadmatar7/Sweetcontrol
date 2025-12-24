@@ -744,7 +744,6 @@ export default function AdminPage() {
                   chartData.map(function (day, idx) {
                     var maxPayers = Math.max.apply(Math, chartData.map(function (d) { return d.payers; }));
                     var maxMoney = Math.max.apply(Math, chartData.map(function (d) { return d.money; }));
-                    var maxValue = Math.max(maxPayers, maxMoney);
                     
                     var payerHeight = maxPayers > 0 ? (day.payers / maxPayers) * 100 : 0;
                     var moneyHeight = maxMoney > 0 ? (day.money / maxMoney) * 100 : 0;
@@ -757,69 +756,71 @@ export default function AdminPage() {
                       "div",
                       {
                         key: idx,
-                        className: "flex-1 flex flex-col items-center gap-1 relative",
+                        className: "flex-1 flex flex-col justify-end items-center h-full relative group",
                       },
-                      // Amount labels at the top
+                      // Date label at the bottom
                       h(
                         "div",
                         {
-                          className: "absolute -top-8 left-1/2 transform -translate-x-1/2 flex flex-col items-center gap-0.5 w-full",
-                        },
-                        day.money > 0 ? h(
-                          "div",
-                          {
-                            className: "text-[10px] text-emerald-300 font-semibold whitespace-nowrap",
-                          },
-                          "€" + day.money.toFixed(2)
-                        ) : null,
-                        day.payers > 0 ? h(
-                          "div",
-                          {
-                            className: "text-[10px] text-blue-300 font-semibold whitespace-nowrap",
-                          },
-                          day.payers
-                        ) : null
-                      ),
-                      // Money bar (green)
-                      h(
-                        "div",
-                        {
-                          className: "w-full relative",
-                          style: { minHeight: "4px" },
-                        },
-                        h(
-                          "div",
-                          {
-                            className: "w-full bg-gradient-to-t from-emerald-500 to-emerald-300 rounded-t hover:from-emerald-400 hover:to-emerald-200 transition-colors",
-                            style: { height: moneyHeight + "%", minHeight: moneyHeight > 0 ? "4px" : "0" },
-                            title: day.date + ": €" + day.money.toFixed(2) + " (" + day.payers + " payers)",
-                          }
-                        )
-                      ),
-                      // Payers bar (blue)
-                      h(
-                        "div",
-                        {
-                          className: "w-full relative",
-                          style: { minHeight: "4px" },
-                        },
-                        h(
-                          "div",
-                          {
-                            className: "w-full bg-gradient-to-t from-blue-500 to-blue-300 rounded-t hover:from-blue-400 hover:to-blue-200 transition-colors",
-                            style: { height: payerHeight + "%", minHeight: payerHeight > 0 ? "4px" : "0" },
-                            title: day.date + ": " + day.payers + " payers (€" + day.money.toFixed(2) + ")",
-                          }
-                        )
-                      ),
-                      // Date label
-                      h(
-                        "div",
-                        {
-                          className: "text-[10px] text-white/60 mt-1 text-center",
-                          style: { writingMode: "horizontal-tb" },
+                          className: "absolute -bottom-6 text-[10px] text-white/60 whitespace-nowrap",
                         },
                         dateStr
+                      ),
+                      
+                      // Bars container (side-by-side)
+                      h(
+                        "div",
+                        {
+                          className: "flex items-end justify-center gap-1 h-full w-full px-1",
+                        },
+                        // Money Bar Column
+                        h(
+                          "div",
+                          {
+                            className: "flex flex-col justify-end items-center h-full w-full max-w-[16px]",
+                          },
+                          // Label
+                          day.money > 0 ? h(
+                            "div",
+                            {
+                              className: "mb-1 text-[10px] text-emerald-300 font-semibold whitespace-nowrap",
+                            },
+                            "€" + day.money.toFixed(2)
+                          ) : null,
+                          // Bar
+                          h(
+                            "div",
+                            {
+                              className: "w-full bg-gradient-to-t from-emerald-500 to-emerald-300 rounded-t hover:from-emerald-400 hover:to-emerald-200 transition-colors",
+                              style: { height: moneyHeight + "%", minHeight: moneyHeight > 0 ? "4px" : "0" },
+                              title: day.date + ": €" + day.money.toFixed(2),
+                            }
+                          )
+                        ),
+                        // Payers Bar Column
+                        h(
+                          "div",
+                          {
+                            className: "flex flex-col justify-end items-center h-full w-full max-w-[16px]",
+                          },
+                          // Label
+                          day.payers > 0 ? h(
+                            "div",
+                            {
+                              className: "mb-1 text-[10px] text-blue-300 font-semibold whitespace-nowrap",
+                            },
+                            day.payers
+                          ) : null,
+                          // Bar
+                          h(
+                            "div",
+                            {
+                              className: "w-full bg-gradient-to-t from-blue-500 to-blue-300 rounded-t hover:from-blue-400 hover:to-blue-200 transition-colors",
+                              style: { height: payerHeight + "%", minHeight: payerHeight > 0 ? "4px" : "0" },
+                              title: day.date + ": " + day.payers + " payers",
+                            }
+                          )
+                        )
                       )
                     );
                   })
