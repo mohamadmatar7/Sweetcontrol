@@ -122,6 +122,7 @@ export default function AdminPage() {
   const [creditsTotal, setCreditsTotal] = useState(1);
   const [creditsUsed, setCreditsUsed] = useState(0);
   const [status, setStatus] = useState("waiting");
+  const [autoRefresh, setAutoRefresh] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
@@ -239,10 +240,12 @@ export default function AdminPage() {
 
     // Poll every 2 seconds
     if (pollRef.current) clearInterval(pollRef.current);
-    pollRef.current = setInterval(function () {
-      // Avoid noisy errors while typing token etc.
-      refresh(true);
-    }, 2000);
+    if (autoRefresh) {
+      pollRef.current = setInterval(function () {
+        // Avoid noisy errors while typing token etc.
+        refresh(true);
+      }, 2000);
+    }
 
     // Also refresh on focus/visibility
     function onFocus() {
@@ -261,7 +264,7 @@ export default function AdminPage() {
       document.removeEventListener("visibilitychange", onVis);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [adminToken]);
+  }, [adminToken, autoRefresh]);
 
   function saveToken() {
     setError("");
@@ -634,6 +637,17 @@ export default function AdminPage() {
             "div",
             { className: "flex gap-2 flex-wrap" },
             h(
+              "label",
+              { className: "flex items-center gap-2 bg-white/10 px-3 rounded-xl cursor-pointer select-none border border-white/15 hover:bg-white/20 transition-colors" },
+              h("input", {
+                type: "checkbox",
+                checked: autoRefresh,
+                onChange: function (e) { setAutoRefresh(e.target.checked); },
+                className: "accent-yellow-400 w-4 h-4 cursor-pointer"
+              }),
+              h("span", { className: "text-sm font-medium" }, "Auto-refresh")
+            ),
+            h(
               Button,
               { variant: "dark", onClick: function(){ refresh(false); }, disabled: loading || !adminToken },
               loading ? "Loading..." : "Refresh"
@@ -744,9 +758,10 @@ export default function AdminPage() {
                   chartData.map(function (day, idx) {
                     var maxPayers = Math.max.apply(Math, chartData.map(function (d) { return d.payers; }));
                     var maxMoney = Math.max.apply(Math, chartData.map(function (d) { return d.money; }));
+                    var globalMax = Math.max(maxPayers, maxMoney);
                     
-                    var payerHeight = maxPayers > 0 ? (day.payers / maxPayers) * 100 : 0;
-                    var moneyHeight = maxMoney > 0 ? (day.money / maxMoney) * 100 : 0;
+                    var payerHeight = globalMax > 0 ? (day.payers / globalMax) * 100 : 0;
+                    var moneyHeight = globalMax > 0 ? (day.money / globalMax) * 100 : 0;
                     
                     // Format date for display
                     var dateObj = new Date(day.date);
@@ -771,13 +786,13 @@ export default function AdminPage() {
                       h(
                         "div",
                         {
-                          className: "flex items-end justify-center gap-1.5 h-full w-full px-1.5",
+                          className: "flex items-end justify-center gap-0.5 h-full w-full px-0.5",
                         },
                         // Money Bar Column
                         h(
                           "div",
                           {
-                            className: "flex flex-col justify-end items-center h-full w-full max-w-[20px]",
+                            className: "flex flex-col justify-end items-center h-full flex-1",
                           },
                           // Label
                           day.money > 0 ? h(
@@ -801,7 +816,7 @@ export default function AdminPage() {
                         h(
                           "div",
                           {
-                            className: "flex flex-col justify-end items-center h-full w-full max-w-[20px]",
+                            className: "flex flex-col justify-end items-center h-full flex-1",
                           },
                           // Label
                           day.payers > 0 ? h(
