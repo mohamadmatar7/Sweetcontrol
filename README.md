@@ -33,7 +33,7 @@ SweetControl is an interactive arcade experience where users can:
   - Grab (17), Credit (25)
 
 ### Display & Input
-- **Touchscreen Display** - Shows sugar graph visualization and serves as fallback control interface
+- **Touchscreen Display** - Shows sugar graph visualization
 - **USB Webcam** - Captures images for TensorFlow Lite object detection
 
 ### Networking & Infrastructure
